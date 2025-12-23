@@ -260,8 +260,17 @@ Settings apply globally but may be overridden per segment.
 - DOCX parsing with segment extraction
 - Style-based heading detection
 - List item detection (bullets and numbered)
-- Table detection with merged cell warnings
-- Image extraction
+- Full GFM table conversion:
+  - Extracts all cell contents
+  - Handles merged cells (GridSpan) with warnings
+  - Proper header row and separator generation
+  - Escapes pipe characters in cell content
+- Image extraction and conversion:
+  - Extracts embedded images with relationship ID linking
+  - Alt text extraction from DocProperties
+  - Correct file extension based on content type
+  - Consistent filenames between preview and export
+- Empty paragraph collapsing (Word spacing doesn't affect Markdown output)
 - Markdown conversion and export
 - Diagnostic report generation
 - Unsupported feature detection (headers/footers, comments, track changes, etc.)
@@ -271,6 +280,7 @@ Settings apply globally but may be overridden per segment.
   - Manual markdown override
   - Exclude from output
   - Live preview updates when overrides change
+- Theme-aware Markdown preview (tables, headings, text adapt to light/dark mode)
 
 ### Planned (Future)
 - Rich DOCX visual preview
