@@ -4,10 +4,11 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Docx2Md.UI.ViewModels;
+using SukiUI.Controls;
 
 namespace Docx2Md.UI.Views;
 
-public partial class MainWindow : Window
+public partial class MainWindow : SukiWindow
 {
     public MainWindow()
     {
