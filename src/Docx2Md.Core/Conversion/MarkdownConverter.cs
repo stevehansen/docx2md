@@ -136,14 +136,44 @@ public class MarkdownConverter
 
     private string ConvertTable(Segment segment)
     {
-        // Basic table conversion placeholder
-        // Full table conversion would require parsing TableRow and TableCell elements
-        segment.AddDiagnostic(
-            DiagnosticLevel.Warning,
-            Diagnostics.DiagnosticCodes.TABLE_COMPLEX_FORMATTING,
-            "Table conversion is simplified. Complex formatting may be lost.");
+        // Get table data from metadata
+        if (!segment.Metadata.AdditionalProperties.TryGetValue("TableData", out var tableDataObj) ||
+            tableDataObj is not List<List<string>> tableData ||
+            tableData.Count == 0)
+        {
+            // Fallback for tables without extracted data
+            segment.AddDiagnostic(
+                DiagnosticLevel.Warning,
+                Diagnostics.DiagnosticCodes.TABLE_COMPLEX_FORMATTING,
+                "Table data could not be extracted.");
+            return $"*[Table: {segment.Content}]*";
+        }
 
-        return $"*[Table: {segment.Content}]*";
+        var sb = new StringBuilder();
+
+        // First row is the header
+        var headerRow = tableData[0];
+        sb.AppendLine("| " + string.Join(" | ", headerRow.Select(EscapeTableCell)) + " |");
+
+        // Separator row
+        sb.AppendLine("| " + string.Join(" | ", headerRow.Select(_ => "---")) + " |");
+
+        // Data rows
+        for (int i = 1; i < tableData.Count; i++)
+        {
+            sb.AppendLine("| " + string.Join(" | ", tableData[i].Select(EscapeTableCell)) + " |");
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string EscapeTableCell(string cell)
+    {
+        if (string.IsNullOrEmpty(cell))
+            return " ";
+
+        // Escape pipe characters and trim
+        return cell.Replace("|", "\\|").Replace("\n", " ").Replace("\r", "");
     }
 
     private string ConvertImage(Segment segment, DocumentModel document)

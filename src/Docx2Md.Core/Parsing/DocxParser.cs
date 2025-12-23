@@ -269,18 +269,57 @@ public class DocxParser
             Type = SegmentType.Table
         };
 
-        // Extract table content
-        var rows = table.Elements<TableRow>();
-        var rowCount = rows.Count();
-        
-        segment.Content = $"Table with {rowCount} rows";
+        // Extract table content - all rows and cells
+        var rows = table.Elements<TableRow>().ToList();
+        var rowCount = rows.Count;
+        var tableData = new List<List<string>>();
+        var maxColumns = 0;
+
+        foreach (var row in rows)
+        {
+            var rowData = new List<string>();
+            foreach (var cell in row.Elements<TableCell>())
+            {
+                // Extract text from all paragraphs in the cell
+                var cellText = string.Join(" ",
+                    cell.Elements<Paragraph>()
+                        .Select(p => string.Join("", p.Descendants<Text>().Select(t => t.Text))));
+
+                // Handle merged cells (GridSpan) by adding empty columns
+                var gridSpan = cell.TableCellProperties?.GridSpan?.Val?.Value ?? 1;
+                rowData.Add(cellText.Trim());
+
+                // Add empty strings for spanned columns (GFM doesn't support colspan)
+                for (int i = 1; i < gridSpan; i++)
+                {
+                    rowData.Add("");
+                }
+            }
+            tableData.Add(rowData);
+            if (rowData.Count > maxColumns)
+                maxColumns = rowData.Count;
+        }
+
+        // Normalize rows to have same column count
+        foreach (var row in tableData)
+        {
+            while (row.Count < maxColumns)
+                row.Add("");
+        }
+
+        // Store table data for converter
+        segment.Metadata.AdditionalProperties["TableData"] = tableData;
         segment.Metadata.AdditionalProperties["RowCount"] = rowCount;
+        segment.Metadata.AdditionalProperties["ColumnCount"] = maxColumns;
+
+        // Create content summary for display
+        segment.Content = $"Table with {rowCount} rows, {maxColumns} columns";
 
         // Check for merged cells
         var mergedCells = table.Descendants<TableCell>()
-            .Where(c => c.TableCellProperties?.GridSpan != null || 
+            .Where(c => c.TableCellProperties?.GridSpan != null ||
                        c.TableCellProperties?.VerticalMerge != null);
-        
+
         if (mergedCells.Any())
         {
             segment.AddDiagnostic(

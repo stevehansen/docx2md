@@ -285,6 +285,36 @@
                                     <Style Selector="TextBlock">
                                         <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
                                     </Style>
+                                    <!-- Style tables to use theme colors -->
+                                    <Style Selector="Border.Table">
+                                        <Setter Property="BorderBrush" Value="{DynamicResource SukiBorderBrush}" />
+                                        <Setter Property="Background" Value="{DynamicResource SukiCardBackground}" />
+                                    </Style>
+                                    <Style Selector="Grid.Table">
+                                        <Setter Property="Background" Value="{DynamicResource SukiCardBackground}" />
+                                    </Style>
+                                    <Style Selector="Border.TableHeader">
+                                        <Setter Property="Background" Value="{DynamicResource SukiLowBackground}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource SukiBorderBrush}" />
+                                    </Style>
+                                    <Style Selector="Border.TableHeader ctxt|CTextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                        <Setter Property="FontWeight" Value="Bold" />
+                                    </Style>
+                                    <Style Selector="Border.OddTableRow">
+                                        <Setter Property="Background" Value="{DynamicResource SukiBackground}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource SukiBorderBrush}" />
+                                    </Style>
+                                    <Style Selector="Border.OddTableRow ctxt|CTextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                    </Style>
+                                    <Style Selector="Border.EvenTableRow">
+                                        <Setter Property="Background" Value="{DynamicResource SukiCardBackground}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource SukiBorderBrush}" />
+                                    </Style>
+                                    <Style Selector="Border.EvenTableRow ctxt|CTextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                    </Style>
                                 </md:MarkdownScrollViewer.Styles>
                             </md:MarkdownScrollViewer>
                             <!-- Raw Markdown -->
