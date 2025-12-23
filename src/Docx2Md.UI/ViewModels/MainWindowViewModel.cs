@@ -54,6 +54,19 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool _showRawMarkdown = false;
 
+    // Settings properties with change notification
+    [ObservableProperty]
+    private bool _enableStyleBasedHeadingDetection = true;
+
+    [ObservableProperty]
+    private bool _inferHeadingsFromFormatting = true;
+
+    [ObservableProperty]
+    private bool _convertUnderlineToEmphasis = false;
+
+    [ObservableProperty]
+    private bool _generateDiagnosticReport = true;
+
     [ObservableProperty]
     private bool _hasDocument = false;
 
@@ -65,17 +78,60 @@ public partial class MainWindowViewModel : ViewModelBase
         _converter = new Docx2MdConverter(Settings);
     }
 
-    partial void OnSettingsChanged(ConversionSettings value)
+    // View toggle commands
+    [RelayCommand]
+    private void ToggleDocxPreview() => ShowDocxPreview = !ShowDocxPreview;
+
+    [RelayCommand]
+    private void ToggleSegmentInspector() => ShowSegmentInspector = !ShowSegmentInspector;
+
+    [RelayCommand]
+    private void ToggleMarkdownPreview() => ShowMarkdownPreview = !ShowMarkdownPreview;
+
+    // Settings toggle commands
+    [RelayCommand]
+    private void ToggleStyleBasedHeadingDetection() => EnableStyleBasedHeadingDetection = !EnableStyleBasedHeadingDetection;
+
+    [RelayCommand]
+    private void ToggleInferHeadingsFromFormatting() => InferHeadingsFromFormatting = !InferHeadingsFromFormatting;
+
+    [RelayCommand]
+    private void ToggleConvertUnderlineToEmphasis() => ConvertUnderlineToEmphasis = !ConvertUnderlineToEmphasis;
+
+    [RelayCommand]
+    private void ToggleGenerateDiagnosticReport() => GenerateDiagnosticReport = !GenerateDiagnosticReport;
+
+    // Reconvert when settings properties change
+    partial void OnEnableStyleBasedHeadingDetectionChanged(bool value) => ApplySettingsAndReconvert();
+    partial void OnInferHeadingsFromFormattingChanged(bool value) => ApplySettingsAndReconvert();
+    partial void OnConvertUnderlineToEmphasisChanged(bool value) => ApplySettingsAndReconvert();
+    partial void OnGenerateDiagnosticReportChanged(bool value) => ApplySettingsAndReconvert();
+
+    private void ApplySettingsAndReconvert()
     {
-        // When settings change, reconvert the document if one is loaded
+        // Update the Settings object
+        Settings.EnableStyleBasedHeadingDetection = EnableStyleBasedHeadingDetection;
+        Settings.InferHeadingsFromFormatting = InferHeadingsFromFormatting;
+        Settings.ConvertUnderlineToEmphasis = ConvertUnderlineToEmphasis;
+        Settings.GenerateDiagnosticReport = GenerateDiagnosticReport;
+
+        // Reconvert if document is loaded
         if (_document != null)
         {
-            // Reconvert with new settings
-            var newConverter = new Docx2MdConverter(value);
+            var newConverter = new Docx2MdConverter(Settings);
             newConverter.ConvertDocument(_document);
             UpdateMarkdownOutput();
             StatusText = "Document reconverted with new settings.";
         }
+    }
+
+    partial void OnSettingsChanged(ConversionSettings value)
+    {
+        // Sync individual properties when entire Settings object changes
+        EnableStyleBasedHeadingDetection = value.EnableStyleBasedHeadingDetection;
+        InferHeadingsFromFormatting = value.InferHeadingsFromFormatting;
+        ConvertUnderlineToEmphasis = value.ConvertUnderlineToEmphasis;
+        GenerateDiagnosticReport = value.GenerateDiagnosticReport;
     }
 
     partial void OnSelectedSegmentChanged(Segment? value)

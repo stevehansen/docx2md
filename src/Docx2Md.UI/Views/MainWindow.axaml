@@ -1,6 +1,7 @@
 <suki:SukiWindow xmlns="https://github.com/avaloniaui"
          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
          xmlns:vm="using:Docx2Md.UI.ViewModels"
+         xmlns:conv="using:Docx2Md.UI.Converters"
          xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
          xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
          xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
@@ -16,25 +17,72 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
+    <!-- Keyboard Shortcuts -->
+    <suki:SukiWindow.KeyBindings>
+        <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenFileCommand}" />
+        <KeyBinding Gesture="Ctrl+E" Command="{Binding ExportMarkdownCommand}" />
+        <KeyBinding Gesture="F5" Command="{Binding ToggleDocxPreviewCommand}" />
+        <KeyBinding Gesture="F6" Command="{Binding ToggleSegmentInspectorCommand}" />
+        <KeyBinding Gesture="F7" Command="{Binding ToggleMarkdownPreviewCommand}" />
+    </suki:SukiWindow.KeyBindings>
+
     <DockPanel>
         <!-- Menu Bar -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="File">
-                <MenuItem Header="Open DOCX..." Command="{Binding OpenFileCommand}" HotKey="Ctrl+O" />
-                <MenuItem Header="Export Markdown..." Command="{Binding ExportMarkdownCommand}" HotKey="Ctrl+E" IsEnabled="{Binding HasDocument}" />
+                <MenuItem Header="Open DOCX..." Command="{Binding OpenFileCommand}" InputGesture="Ctrl+O" />
+                <MenuItem Header="Export Markdown..." Command="{Binding ExportMarkdownCommand}" InputGesture="Ctrl+E" IsEnabled="{Binding HasDocument}" />
                 <Separator />
-                <MenuItem Header="Exit" Command="{Binding ExitCommand}" />
+                <MenuItem Header="Exit" Command="{Binding ExitCommand}" InputGesture="Alt+F4" />
             </MenuItem>
             <MenuItem Header="View">
-                <MenuItem Header="Show DOCX Preview" IsChecked="{Binding ShowDocxPreview}" />
-                <MenuItem Header="Show Segment Inspector" IsChecked="{Binding ShowSegmentInspector}" />
-                <MenuItem Header="Show Markdown Preview" IsChecked="{Binding ShowMarkdownPreview}" />
+                <MenuItem Header="Show DOCX Preview"
+                          Command="{Binding ToggleDocxPreviewCommand}"
+                          InputGesture="F5">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding ShowDocxPreview}" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Show Segment Inspector"
+                          Command="{Binding ToggleSegmentInspectorCommand}"
+                          InputGesture="F6">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding ShowSegmentInspector}" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Show Markdown Preview"
+                          Command="{Binding ToggleMarkdownPreviewCommand}"
+                          InputGesture="F7">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding ShowMarkdownPreview}" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
             <MenuItem Header="Settings">
-                <MenuItem Header="Enable Style-Based Heading Detection" IsChecked="{Binding Settings.EnableStyleBasedHeadingDetection}" />
-                <MenuItem Header="Infer Headings From Formatting" IsChecked="{Binding Settings.InferHeadingsFromFormatting}" />
-                <MenuItem Header="Convert Underline to Emphasis" IsChecked="{Binding Settings.ConvertUnderlineToEmphasis}" />
-                <MenuItem Header="Generate Diagnostic Report" IsChecked="{Binding Settings.GenerateDiagnosticReport}" />
+                <MenuItem Header="Enable Style-Based Heading Detection"
+                          Command="{Binding ToggleStyleBasedHeadingDetectionCommand}">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding EnableStyleBasedHeadingDetection}" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Infer Headings From Formatting"
+                          Command="{Binding ToggleInferHeadingsFromFormattingCommand}">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding InferHeadingsFromFormatting}" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Convert Underline to Emphasis"
+                          Command="{Binding ToggleConvertUnderlineToEmphasisCommand}">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding ConvertUnderlineToEmphasis}" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Generate Diagnostic Report"
+                          Command="{Binding ToggleGenerateDiagnosticReportCommand}">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding GenerateDiagnosticReport}" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
         </Menu>
 
@@ -46,9 +94,16 @@
                        Foreground="{DynamicResource SukiText}" />
         </Border>
 
-        <!-- Main Content: Three-Pane Layout -->
-        <Grid ColumnDefinitions="*,5,*,5,*">
-            
+        <!-- Main Content: Three-Pane Layout using DockPanel for proper collapse -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{Binding ShowDocxPreview, Converter={x:Static conv:BoolToGridLengthConverter.Instance}}" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="{Binding ShowSegmentInspector, Converter={x:Static conv:BoolToGridLengthConverter.Instance}}" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="{Binding ShowMarkdownPreview, Converter={x:Static conv:BoolToGridLengthConverter.Instance}}" />
+            </Grid.ColumnDefinitions>
+
             <!-- Left Pane: DOCX Preview -->
             <Border Grid.Column="0" BorderBrush="{DynamicResource SukiBorderBrush}" BorderThickness="1" Margin="5"
                     IsVisible="{Binding ShowDocxPreview}">
@@ -65,7 +120,7 @@
             </Border>
 
             <!-- Splitter 1 -->
-            <GridSplitter Grid.Column="1" Background="{DynamicResource SukiBorderBrush}" ResizeDirection="Columns"
+            <GridSplitter Grid.Column="1" Width="5" Background="{DynamicResource SukiBorderBrush}" ResizeDirection="Columns"
                           IsVisible="{Binding ShowDocxPreview}" />
 
             <!-- Middle Pane: Segment Inspector -->
@@ -95,7 +150,7 @@
             </Border>
 
             <!-- Splitter 2 -->
-            <GridSplitter Grid.Column="3" Background="{DynamicResource SukiBorderBrush}" ResizeDirection="Columns"
+            <GridSplitter Grid.Column="3" Width="5" Background="{DynamicResource SukiBorderBrush}" ResizeDirection="Columns"
                           IsVisible="{Binding ShowSegmentInspector}" />
 
             <!-- Right Pane: Markdown Preview -->
@@ -115,10 +170,10 @@
                     <ScrollViewer>
                         <StackPanel Margin="10">
                             <!-- Rendered Markdown -->
-                            <md:MarkdownScrollViewer Markdown="{Binding MarkdownOutput}" 
+                            <md:MarkdownScrollViewer Markdown="{Binding MarkdownOutput}"
                                                      IsVisible="{Binding !ShowRawMarkdown}" />
                             <!-- Raw Markdown -->
-                            <TextBox Text="{Binding MarkdownOutput}" 
+                            <TextBox Text="{Binding MarkdownOutput}"
                                      IsReadOnly="True"
                                      TextWrapping="Wrap"
                                      AcceptsReturn="True"
