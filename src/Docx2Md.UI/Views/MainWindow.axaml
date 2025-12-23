@@ -130,69 +130,108 @@
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="Segment Inspector" FontWeight="Bold"
                                Padding="5" Background="{DynamicResource SukiCardBackground}" />
-                    <DataGrid ItemsSource="{Binding Segments}"
+
+                    <!-- Segment List (simplified) -->
+                    <DataGrid DockPanel.Dock="Top"
+                              ItemsSource="{Binding Segments}"
                               SelectedItem="{Binding SelectedSegment}"
                               AutoGenerateColumns="False"
-                              IsReadOnly="False"
+                              IsReadOnly="True"
                               GridLinesVisibility="All"
                               CanUserReorderColumns="True"
-                              CanUserResizeColumns="True">
+                              CanUserResizeColumns="True"
+                              MinHeight="150"
+                              MaxHeight="300">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="#" Binding="{Binding OrderIndex}" Width="50" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Type" Binding="{Binding EffectiveType}" Width="80" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Style" Binding="{Binding Metadata.StyleName}" Width="100" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Content" Binding="{Binding Content}" Width="150" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Markdown" Binding="{Binding EffectiveMarkdown}" Width="150" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Diag" Binding="{Binding DiagnosticCount}" Width="50" IsReadOnly="True" />
-                            <DataGridCheckBoxColumn Header="Exclude" Binding="{Binding ExcludeFromOutput}" Width="70" />
-                            <!-- Override Controls -->
-                            <DataGridTemplateColumn Header="H-Level" Width="90">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AvailableHeadingLevels}"
-                                                  SelectedItem="{Binding OverrideHeadingLevel}"
-                                                  HorizontalAlignment="Stretch"
-                                                  Padding="4,2"
-                                                  MinHeight="24">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding Converter={x:Static conv:HeadingLevelDisplayConverter.Instance}}" />
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="Type Override" Width="110">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AvailableSegmentTypes}"
-                                                  SelectedItem="{Binding OverrideType}"
-                                                  HorizontalAlignment="Stretch"
-                                                  Padding="4,2"
-                                                  MinHeight="24">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding Converter={x:Static conv:SegmentTypeDisplayConverter.Instance}}" />
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="Manual Markdown" Width="200">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBox Text="{Binding ManualMarkdownOverride}"
-                                                 Watermark="(use converted)"
-                                                 HorizontalAlignment="Stretch"
-                                                 Padding="4,2"
-                                                 MinHeight="24" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="#" Binding="{Binding OrderIndex}" Width="40" />
+                            <DataGridTextColumn Header="Type" Binding="{Binding EffectiveType}" Width="80" />
+                            <DataGridTextColumn Header="Style" Binding="{Binding Metadata.StyleName}" Width="100" />
+                            <DataGridTextColumn Header="Content" Binding="{Binding Content}" Width="*" />
+                            <DataGridTextColumn Header="Diag" Binding="{Binding DiagnosticCount}" Width="45" />
                         </DataGrid.Columns>
                     </DataGrid>
+
+                    <!-- Detail Panel (shown when segment selected) -->
+                    <Border DockPanel.Dock="Bottom"
+                            IsVisible="{Binding SelectedSegment, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            Background="{DynamicResource SukiCardBackground}"
+                            BorderBrush="{DynamicResource SukiBorderBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="10"
+                            Margin="0,5,0,0">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Segment Overrides" FontWeight="SemiBold" />
+
+                            <!-- Row 1: Exclude, Heading Level, Type Override -->
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,*">
+                                <CheckBox Grid.Column="0"
+                                          Content="Exclude"
+                                          IsChecked="{Binding SelectedSegment.ExcludeFromOutput}"
+                                          Margin="0,0,15,0" />
+
+                                <TextBlock Grid.Column="1" Text="H-Level:" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                <ComboBox Grid.Column="2"
+                                          ItemsSource="{Binding AvailableHeadingLevels}"
+                                          SelectedItem="{Binding SelectedSegment.OverrideHeadingLevel}"
+                                          HorizontalAlignment="Stretch"
+                                          Margin="0,0,15,0">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Converter={x:Static conv:HeadingLevelDisplayConverter.Instance}}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <TextBlock Grid.Column="3" Text="Type:" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                <ComboBox Grid.Column="4"
+                                          ItemsSource="{Binding AvailableSegmentTypes}"
+                                          SelectedItem="{Binding SelectedSegment.OverrideType}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Converter={x:Static conv:SegmentTypeDisplayConverter.Instance}}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+
+                            <!-- Row 2: Manual Markdown Override -->
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text="Manual Markdown Override:" Margin="0,0,0,5" />
+                                <TextBox Text="{Binding SelectedSegment.ManualMarkdownOverride}"
+                                         Watermark="Leave empty to use converted markdown"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="60"
+                                         MaxHeight="120" />
+                            </DockPanel>
+
+                            <!-- Row 3: Preview of effective markdown -->
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text="Effective Markdown:" Margin="0,0,0,5"
+                                           Foreground="{DynamicResource SukiLowText}" />
+                                <Border Background="{DynamicResource SukiBackground}"
+                                        BorderBrush="{DynamicResource SukiBorderBrush}"
+                                        BorderThickness="1"
+                                        Padding="8"
+                                        CornerRadius="4">
+                                    <TextBlock Text="{Binding SelectedSegment.EffectiveMarkdown}"
+                                               FontFamily="Consolas,Courier New,monospace"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource SukiText}" />
+                                </Border>
+                            </DockPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Placeholder when no segment selected -->
+                    <Border DockPanel.Dock="Bottom"
+                            IsVisible="{Binding SelectedSegment, Converter={x:Static ObjectConverters.IsNull}}"
+                            Padding="20">
+                        <TextBlock Text="Select a segment to view and edit overrides"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource SukiLowText}" />
+                    </Border>
                 </DockPanel>
             </Border>
 
