@@ -169,9 +169,19 @@
                     </Grid>
                     <ScrollViewer>
                         <StackPanel Margin="10">
-                            <!-- Rendered Markdown -->
+                            <!-- Rendered Markdown with theme-aware styling -->
                             <md:MarkdownScrollViewer Markdown="{Binding MarkdownOutput}"
-                                                     IsVisible="{Binding !ShowRawMarkdown}" />
+                                                     IsVisible="{Binding !ShowRawMarkdown}">
+                                <md:MarkdownScrollViewer.Styles>
+                                    <!-- Style all text to use theme text color -->
+                                    <Style Selector="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                    </Style>
+                                    <Style Selector="Run">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                    </Style>
+                                </md:MarkdownScrollViewer.Styles>
+                            </md:MarkdownScrollViewer>
                             <!-- Raw Markdown -->
                             <TextBox Text="{Binding MarkdownOutput}"
                                      IsReadOnly="True"
@@ -179,7 +189,8 @@
                                      AcceptsReturn="True"
                                      FontFamily="Consolas,Courier New,monospace"
                                      IsVisible="{Binding ShowRawMarkdown}"
-                                     Background="White" />
+                                     Foreground="{DynamicResource SukiText}"
+                                     Background="{DynamicResource SukiCardBackground}" />
                         </StackPanel>
                     </ScrollViewer>
                 </DockPanel>
