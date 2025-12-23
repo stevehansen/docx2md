@@ -16,6 +16,8 @@ public static class DiagnosticCodes
     public const string MULTI_COLUMN_LAYOUT_IGNORED = "MULTI_COLUMN_LAYOUT_IGNORED";
     public const string FLOATING_IMAGE_IGNORED = "FLOATING_IMAGE_IGNORED";
     public const string FIELD_IGNORED = "FIELD_IGNORED";
+    public const string FOOTNOTE_IGNORED = "FOOTNOTE_IGNORED";
+    public const string ENDNOTE_IGNORED = "ENDNOTE_IGNORED";
 
     // Table issues
     public const string TABLE_MERGED_CELLS_LOSSY = "TABLE_MERGED_CELLS_LOSSY";

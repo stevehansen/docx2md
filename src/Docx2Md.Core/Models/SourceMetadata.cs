@@ -9,6 +9,8 @@ public class SourceMetadata
     public int? OutlineLevel { get; set; }
     public string? NumberingId { get; set; }
     public int? NumberingLevel { get; set; }
+    public bool IsNumberedList { get; set; }
+    public int? NumberingStartValue { get; set; }
     public bool IsBold { get; set; }
     public bool IsItalic { get; set; }
     public bool IsUnderline { get; set; }

@@ -122,9 +122,16 @@ public class MarkdownConverter
         var indent = new string(' ', level * 2);
         var content = ProcessInlineFormatting(segment.Content);
 
-        // Simple bullet list for now
-        // TODO: Detect numbered vs bulleted lists from numbering definition
-        return $"{indent}- {content}";
+        if (segment.Metadata.IsNumberedList)
+        {
+            // Numbered list - use "1." format (Markdown auto-numbers)
+            return $"{indent}1. {content}";
+        }
+        else
+        {
+            // Bulleted list
+            return $"{indent}- {content}";
+        }
     }
 
     private string ConvertTable(Segment segment)

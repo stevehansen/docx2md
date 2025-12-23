@@ -208,13 +208,18 @@ Settings apply globally but may be overridden per segment.
 ## 11. Technical Constraints
 
 - Desktop application
-- Windows-first (WPF / .NET)
-- No dependency on Microsoft Word runtime (preferred)
+- Cross-platform via Avalonia (.NET 10.0)
+  - Windows 10/11 (native Win32 backend)
+  - macOS (native Cocoa backend)
+  - Linux (X11/Wayland backend)
+- No dependency on Microsoft Word runtime
 - Markdown renderer must support:
-  - Tables
+  - Tables (GitHub-flavored Markdown)
   - Fenced code blocks
   - Images
   - Extensions via pipeline configuration
+- UI Framework: Avalonia 11.x with SukiUI theming
+- MVVM Pattern: CommunityToolkit.Mvvm with source generators
 
 ---
 
@@ -248,10 +253,35 @@ Settings apply globally but may be overridden per segment.
 
 ---
 
-## 15. Open Questions
+## 15. Implementation Status
 
-- Preferred DOCX preview strategy (render vs approximation)
-- Default Markdown flavor (CommonMark vs GFM)
-- Persistence of per-segment overrides across re-imports
+### Implemented (v1.0)
+- Three-pane workbench layout
+- DOCX parsing with segment extraction
+- Style-based heading detection
+- List item detection (bullets and numbered)
+- Table detection with merged cell warnings
+- Image extraction
+- Markdown conversion and export
+- Diagnostic report generation
+- Unsupported feature detection (headers/footers, comments, track changes, etc.)
+
+### Planned (Future)
+- Rich DOCX visual preview
+- Visual segment highlighting across panes
+- Full override UI controls (heading level, type change)
+- Settings persistence between sessions
+- Drag-and-drop file opening
+- Recent files list
+
+---
+
+## 16. Resolved Questions
+
+| Question | Decision | Rationale |
+|----------|----------|-----------|
+| DOCX preview strategy | Text approximation (v1), rich rendering (future) | Simpler implementation; visual rendering deferred |
+| Default Markdown flavor | GitHub-flavored Markdown (GFM) | GFM tables are widely supported; aligns with Git workflows |
+| Override persistence | Not persisted across re-imports (v1) | Future enhancement; requires session/project file format |
 
 ---

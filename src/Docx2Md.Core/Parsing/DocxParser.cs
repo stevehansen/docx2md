@@ -1,6 +1,10 @@
+using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Docx2Md.Core.Models;
+using Drawing = DocumentFormat.OpenXml.Drawing;
+using DrawingWp = DocumentFormat.OpenXml.Drawing.Wordprocessing;
+using Vml = DocumentFormat.OpenXml.Vml;
 
 namespace Docx2Md.Core.Parsing;
 
@@ -110,7 +114,7 @@ public class DocxParser
         segment.Type = DetectSegmentType(paragraph, styleId);
 
         // Extract formatting
-        ExtractParagraphFormatting(paragraph, segment);
+        ExtractParagraphFormatting(paragraph, segment, wordDoc);
 
         // Check for images in paragraph
         ProcessInlineImages(paragraph, segment, wordDoc);
@@ -153,7 +157,7 @@ public class DocxParser
         return SegmentType.Paragraph;
     }
 
-    private void ExtractParagraphFormatting(Paragraph paragraph, Segment segment)
+    private void ExtractParagraphFormatting(Paragraph paragraph, Segment segment, WordprocessingDocument wordDoc)
     {
         var runProps = paragraph.Descendants<RunProperties>().FirstOrDefault();
         if (runProps != null)
@@ -174,7 +178,77 @@ public class DocxParser
         {
             segment.Metadata.NumberingId = numPr.NumberingId?.Val?.Value.ToString();
             segment.Metadata.NumberingLevel = numPr.NumberingLevelReference?.Val?.Value;
+
+            // Detect numbered vs bulleted list from numbering definition
+            DetectNumberingFormat(wordDoc, segment, numPr);
         }
+    }
+
+    private void DetectNumberingFormat(WordprocessingDocument wordDoc, Segment segment, NumberingProperties numPr)
+    {
+        var numberingPart = wordDoc.MainDocumentPart?.NumberingDefinitionsPart;
+        if (numberingPart?.Numbering == null)
+            return;
+
+        var numId = numPr.NumberingId?.Val?.Value;
+        var levelIndex = numPr.NumberingLevelReference?.Val?.Value ?? 0;
+
+        if (numId == null)
+            return;
+
+        // Find the numbering instance
+        var numberingInstance = numberingPart.Numbering
+            .Elements<NumberingInstance>()
+            .FirstOrDefault(ni => ni.NumberID?.Value == numId);
+
+        if (numberingInstance?.AbstractNumId?.Val == null)
+            return;
+
+        // Find the abstract numbering definition
+        var abstractNumId = numberingInstance.AbstractNumId.Val.Value;
+        var abstractNum = numberingPart.Numbering
+            .Elements<AbstractNum>()
+            .FirstOrDefault(an => an.AbstractNumberId?.Value == abstractNumId);
+
+        if (abstractNum == null)
+            return;
+
+        // Find the level definition
+        var level = abstractNum.Elements<Level>()
+            .FirstOrDefault(l => l.LevelIndex?.Value == levelIndex);
+
+        if (level?.NumberingFormat?.Val == null)
+            return;
+
+        // Determine if numbered based on numbering format
+        var format = level.NumberingFormat.Val.Value;
+        segment.Metadata.IsNumberedList = IsNumberedFormat(format);
+
+        // Get start value if available
+        if (level.StartNumberingValue?.Val != null)
+        {
+            segment.Metadata.NumberingStartValue = level.StartNumberingValue.Val.Value;
+        }
+    }
+
+    private static bool IsNumberedFormat(NumberFormatValues format)
+    {
+        // NumberFormatValues uses EnumValue comparison
+        if (format == NumberFormatValues.Decimal ||
+            format == NumberFormatValues.DecimalZero ||
+            format == NumberFormatValues.LowerLetter ||
+            format == NumberFormatValues.UpperLetter ||
+            format == NumberFormatValues.LowerRoman ||
+            format == NumberFormatValues.UpperRoman ||
+            format == NumberFormatValues.Ordinal ||
+            format == NumberFormatValues.CardinalText ||
+            format == NumberFormatValues.OrdinalText)
+        {
+            return true;
+        }
+
+        // Bullet and other formats are not numbered
+        return false;
     }
 
     private void ProcessInlineImages(Paragraph paragraph, Segment segment, WordprocessingDocument wordDoc)
@@ -253,6 +327,8 @@ public class DocxParser
 
     private void DetectUnsupportedFeatures(WordprocessingDocument wordDoc, DocumentModel document)
     {
+        var body = wordDoc.MainDocumentPart?.Document.Body;
+
         // Check for headers/footers
         if (wordDoc.MainDocumentPart?.HeaderParts?.Any() == true ||
             wordDoc.MainDocumentPart?.FooterParts?.Any() == true)
@@ -270,6 +346,151 @@ public class DocxParser
                 DiagnosticLevel.Info,
                 Diagnostics.DiagnosticCodes.COMMENT_IGNORED,
                 "Document contains comments which are not included in the conversion");
+        }
+
+        // Check for track changes (revisions)
+        var hasRevisions = body?.Descendants<InsertedRun>().Any() == true ||
+                           body?.Descendants<DeletedRun>().Any() == true ||
+                           body?.Descendants<Inserted>().Any() == true ||
+                           body?.Descendants<Deleted>().Any() == true;
+        if (hasRevisions)
+        {
+            document.AddDiagnostic(
+                DiagnosticLevel.Warning,
+                Diagnostics.DiagnosticCodes.TRACK_CHANGES_IGNORED,
+                "Document contains tracked changes. Only the current version is converted.");
+        }
+
+        // Check for footnotes
+        if (wordDoc.MainDocumentPart?.FootnotesPart != null)
+        {
+            var footnotes = wordDoc.MainDocumentPart.FootnotesPart.Footnotes?
+                .Elements<Footnote>()
+                .Where(f => f.Type?.Value != FootnoteEndnoteValues.Separator &&
+                            f.Type?.Value != FootnoteEndnoteValues.ContinuationSeparator);
+            if (footnotes?.Any() == true)
+            {
+                document.AddDiagnostic(
+                    DiagnosticLevel.Info,
+                    Diagnostics.DiagnosticCodes.FOOTNOTE_IGNORED,
+                    $"Document contains {footnotes.Count()} footnote(s) which are not included in the conversion");
+            }
+        }
+
+        // Check for endnotes
+        if (wordDoc.MainDocumentPart?.EndnotesPart != null)
+        {
+            var endnotes = wordDoc.MainDocumentPart.EndnotesPart.Endnotes?
+                .Elements<Endnote>()
+                .Where(e => e.Type?.Value != FootnoteEndnoteValues.Separator &&
+                            e.Type?.Value != FootnoteEndnoteValues.ContinuationSeparator);
+            if (endnotes?.Any() == true)
+            {
+                document.AddDiagnostic(
+                    DiagnosticLevel.Info,
+                    Diagnostics.DiagnosticCodes.ENDNOTE_IGNORED,
+                    $"Document contains {endnotes.Count()} endnote(s) which are not included in the conversion");
+            }
+        }
+
+        // Check for text boxes (using VML or drawing canvas)
+        var hasTextBoxes = body?.Descendants<Vml.TextBox>().Any() == true ||
+                           body?.Descendants<DrawingWp.WrapNone>()
+                               .Where(w => w.Parent?.Descendants<Drawing.Blip>().Any() != true)
+                               .Any() == true;
+        if (hasTextBoxes)
+        {
+            document.AddDiagnostic(
+                DiagnosticLevel.Warning,
+                Diagnostics.DiagnosticCodes.TEXT_BOX_IGNORED,
+                "Document contains text boxes which are not included in the conversion");
+        }
+
+        // Check for shapes (VML shapes)
+        var hasShapes = body?.Descendants<Vml.Shape>().Any() == true ||
+                        body?.Descendants<Vml.Shapetype>().Any() == true ||
+                        body?.Descendants<Vml.Oval>().Any() == true ||
+                        body?.Descendants<Vml.Rectangle>().Any() == true ||
+                        body?.Descendants<Vml.Line>().Any() == true;
+        if (hasShapes)
+        {
+            document.AddDiagnostic(
+                DiagnosticLevel.Warning,
+                Diagnostics.DiagnosticCodes.SHAPE_IGNORED,
+                "Document contains shapes which are not included in the conversion");
+        }
+
+        // Check for SmartArt (diagrams) - look for dgm:relIds elements in the document
+        var hasDiagrams = body?.Descendants<DocumentFormat.OpenXml.Drawing.Diagrams.RelationshipIds>().Any() == true ||
+                          wordDoc.MainDocumentPart?.Parts.Any(p =>
+                              p.OpenXmlPart.ContentType.Contains("diagram")) == true;
+        if (hasDiagrams)
+        {
+            document.AddDiagnostic(
+                DiagnosticLevel.Warning,
+                Diagnostics.DiagnosticCodes.SMARTART_IGNORED,
+                "Document contains SmartArt graphics which are not included in the conversion");
+        }
+
+        // Check for section breaks and multi-column layouts
+        var sectionProps = body?.Descendants<SectionProperties>().ToList() ?? new List<SectionProperties>();
+        if (sectionProps.Count > 1)
+        {
+            document.AddDiagnostic(
+                DiagnosticLevel.Info,
+                Diagnostics.DiagnosticCodes.SECTION_BREAK_IGNORED,
+                $"Document contains {sectionProps.Count - 1} section break(s). Section formatting is not preserved.");
+        }
+
+        // Check for multi-column layouts
+        var multiColumnSections = sectionProps.Where(sp =>
+        {
+            var columns = sp.GetFirstChild<Columns>();
+            return columns?.ColumnCount?.Value > 1 ||
+                   (columns?.HasChildren == true && columns.ChildElements.Count > 1);
+        });
+        if (multiColumnSections.Any())
+        {
+            document.AddDiagnostic(
+                DiagnosticLevel.Warning,
+                Diagnostics.DiagnosticCodes.MULTI_COLUMN_LAYOUT_IGNORED,
+                "Document contains multi-column layouts which are converted as single-column");
+        }
+
+        // Check for floating images (non-inline positioned images)
+        var floatingImages = body?.Descendants<DrawingWp.Anchor>().Any() == true;
+        if (floatingImages)
+        {
+            document.AddDiagnostic(
+                DiagnosticLevel.Warning,
+                Diagnostics.DiagnosticCodes.FLOATING_IMAGE_IGNORED,
+                "Document contains floating/positioned images. Position information is not preserved.");
+        }
+
+        // Check for Word fields (TOC, page numbers, etc.)
+        var hasFields = body?.Descendants<FieldCode>().Any() == true ||
+                        body?.Descendants<SimpleField>().Any() == true;
+        if (hasFields)
+        {
+            var fieldTypes = new HashSet<string>();
+            foreach (var field in body?.Descendants<FieldCode>() ?? Enumerable.Empty<FieldCode>())
+            {
+                var fieldText = field.Text?.Trim().Split(' ').FirstOrDefault()?.ToUpperInvariant();
+                if (!string.IsNullOrEmpty(fieldText))
+                    fieldTypes.Add(fieldText);
+            }
+            foreach (var field in body?.Descendants<SimpleField>() ?? Enumerable.Empty<SimpleField>())
+            {
+                var instruction = field.Instruction?.Value?.Trim().Split(' ').FirstOrDefault()?.ToUpperInvariant();
+                if (!string.IsNullOrEmpty(instruction))
+                    fieldTypes.Add(instruction);
+            }
+
+            var fieldList = fieldTypes.Count > 0 ? $" ({string.Join(", ", fieldTypes)})" : "";
+            document.AddDiagnostic(
+                DiagnosticLevel.Info,
+                Diagnostics.DiagnosticCodes.FIELD_IGNORED,
+                $"Document contains Word fields{fieldList} which show static values only");
         }
     }
 }
