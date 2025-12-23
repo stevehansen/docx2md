@@ -18,6 +18,10 @@ public partial class MainWindowViewModel : ViewModelBase
     private DocumentModel? _document;
     private string _currentFilePath = string.Empty;
 
+    // Delegate for file dialogs (injected by View)
+    public Func<Task<string?>>? ShowOpenFileDialog { get; set; }
+    public Func<Task<string?>>? ShowSaveFileDialog { get; set; }
+
     [ObservableProperty]
     private string _statusText = "Ready. Open a DOCX file to begin.";
 
@@ -73,14 +77,18 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            // In a real implementation, we would use the platform's file picker
-            // For now, we'll simulate with a hardcoded path
-            StatusText = "Opening file...";
-            
-            // This is a placeholder - actual implementation would use FileOpenPicker
-            // var file = await ShowFileOpenDialog();
-            // For now, just update status
-            StatusText = "File dialog would appear here. Use the Export function to test conversion.";
+            if (ShowOpenFileDialog == null)
+            {
+                StatusText = "File dialog not available. Load a sample document instead.";
+                LoadSampleDocument();
+                return;
+            }
+
+            var filePath = await ShowOpenFileDialog();
+            if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+            {
+                LoadDocument(filePath);
+            }
         }
         catch (Exception ex)
         {
@@ -99,10 +107,22 @@ public partial class MainWindowViewModel : ViewModelBase
 
         try
         {
-            StatusText = "Exporting Markdown...";
-            
-            // This is a placeholder - actual implementation would use FileSavePicker
-            StatusText = "Export dialog would appear here.";
+            if (ShowSaveFileDialog == null)
+            {
+                StatusText = "Save dialog not available.";
+                return;
+            }
+
+            var filePath = await ShowSaveFileDialog();
+            if (!string.IsNullOrEmpty(filePath))
+            {
+                StatusText = "Exporting Markdown...";
+                
+                // Export the document
+                _converter.ExportDocument(_document, filePath);
+                
+                StatusText = $"Successfully exported to {Path.GetFileName(filePath)}";
+            }
         }
         catch (Exception ex)
         {
