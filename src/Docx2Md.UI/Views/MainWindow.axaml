@@ -1,6 +1,7 @@
 <suki:SukiWindow xmlns="https://github.com/avaloniaui"
          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
          xmlns:vm="using:Docx2Md.UI.ViewModels"
+         xmlns:models="using:Docx2Md.UI.Models"
          xmlns:conv="using:Docx2Md.UI.Converters"
          xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
          xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -9,6 +10,7 @@
          xmlns:suki="https://github.com/kikipoulet/SukiUI"
          mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
          x:Class="Docx2Md.UI.Views.MainWindow"
+         x:Name="RootWindow"
          x:DataType="vm:MainWindowViewModel"
          Icon="/Assets/avalonia-logo.ico"
          Title="DOCX → Markdown Translation Workbench"
@@ -33,6 +35,17 @@
             <MenuItem Header="File">
                 <MenuItem Header="Open DOCX..." Command="{Binding OpenFileCommand}" InputGesture="Ctrl+O" />
                 <MenuItem Header="Export Markdown..." Command="{Binding ExportMarkdownCommand}" InputGesture="Ctrl+E" IsEnabled="{Binding HasDocument}" />
+                <Separator />
+                <MenuItem Header="Recent Files" ItemsSource="{Binding RecentFiles}" IsEnabled="{Binding RecentFiles.Count}">
+                    <MenuItem.ItemContainerTheme>
+                        <ControlTheme TargetType="MenuItem" x:DataType="models:RecentFileItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                            <Setter Property="Header" Value="{Binding DisplayName}" />
+                            <Setter Property="Command" Value="{Binding #RootWindow.DataContext.OpenRecentFileCommand}" />
+                            <Setter Property="CommandParameter" Value="{Binding}" />
+                            <Setter Property="ToolTip.Tip" Value="{Binding FilePath}" />
+                        </ControlTheme>
+                    </MenuItem.ItemContainerTheme>
+                </MenuItem>
                 <Separator />
                 <MenuItem Header="Exit" Command="{Binding ExitCommand}" InputGesture="Alt+F4" />
             </MenuItem>
@@ -114,7 +127,25 @@
                     <ScrollViewer>
                         <StackPanel Margin="10">
                             <TextBlock Text="{Binding DocumentTitle}" FontSize="18" FontWeight="Bold" Margin="0,0,0,10" />
-                            <TextBlock Text="{Binding DocxPreviewText}" TextWrapping="Wrap" />
+                            <!-- Segmented preview with click-to-select and highlight -->
+                            <ItemsControl ItemsSource="{Binding Segments}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SegmentViewModel">
+                                        <Border Background="{Binding IsSelected, Converter={x:Static conv:BoolToHighlightBrushConverter.Instance}}"
+                                                Padding="5" Margin="2" CornerRadius="3"
+                                                Cursor="Hand"
+                                                PointerPressed="OnDocxSegmentClick">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Type, StringFormat='[{0}]'}"
+                                                           FontWeight="SemiBold" FontSize="10"
+                                                           Foreground="{DynamicResource SukiLowText}" />
+                                                <TextBlock Text="{Binding Content}" TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource SukiText}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </ScrollViewer>
                 </DockPanel>
@@ -317,15 +348,23 @@
                                     </Style>
                                 </md:MarkdownScrollViewer.Styles>
                             </md:MarkdownScrollViewer>
-                            <!-- Raw Markdown -->
-                            <TextBox Text="{Binding MarkdownOutput}"
-                                     IsReadOnly="True"
-                                     TextWrapping="Wrap"
-                                     AcceptsReturn="True"
-                                     FontFamily="Consolas,Courier New,monospace"
-                                     IsVisible="{Binding ShowRawMarkdown}"
-                                     Foreground="{DynamicResource SukiText}"
-                                     Background="{DynamicResource SukiCardBackground}" />
+                            <!-- Raw Markdown with segment highlighting -->
+                            <ItemsControl ItemsSource="{Binding Segments}" IsVisible="{Binding ShowRawMarkdown}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:SegmentViewModel">
+                                        <Border Background="{Binding IsSelected, Converter={x:Static conv:BoolToHighlightBrushConverter.Instance}}"
+                                                Padding="5" Margin="2" CornerRadius="3"
+                                                Cursor="Hand"
+                                                PointerPressed="OnMarkdownSegmentClick"
+                                                IsVisible="{Binding !ExcludeFromOutput}">
+                                            <TextBlock Text="{Binding EffectiveMarkdown}"
+                                                       TextWrapping="Wrap"
+                                                       FontFamily="Consolas,Courier New,monospace"
+                                                       Foreground="{DynamicResource SukiText}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </ScrollViewer>
                 </DockPanel>

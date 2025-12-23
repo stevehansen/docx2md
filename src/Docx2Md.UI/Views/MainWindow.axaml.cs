@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Platform.Storage;
 using Docx2Md.UI.ViewModels;
 using SukiUI.Controls;
@@ -68,5 +69,26 @@ public partial class MainWindow : SukiWindow
         });
 
         return file?.Path.LocalPath;
+    }
+
+    private void OnDocxSegmentClick(object? sender, PointerPressedEventArgs e)
+    {
+        SelectSegmentFromBorder(sender);
+    }
+
+    private void OnMarkdownSegmentClick(object? sender, PointerPressedEventArgs e)
+    {
+        SelectSegmentFromBorder(sender);
+    }
+
+    private void SelectSegmentFromBorder(object? sender)
+    {
+        if (sender is Border border && border.DataContext is SegmentViewModel segment)
+        {
+            if (DataContext is MainWindowViewModel vm)
+            {
+                vm.SelectedSegment = segment;
+            }
+        }
     }
 }

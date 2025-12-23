@@ -12,12 +12,16 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Docx2Md.Core;
 using Docx2Md.Core.Models;
+using Docx2Md.UI.Models;
+using Docx2Md.UI.Services;
 
 namespace Docx2Md.UI.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly Docx2MdConverter _converter;
+    private readonly SettingsService _settingsService;
+    private readonly AppSettings _appSettings;
     private DocumentModel? _document;
     private string _currentFilePath = string.Empty;
 
@@ -95,9 +99,82 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private ConversionSettings _settings = new();
 
+    [ObservableProperty]
+    private ObservableCollection<RecentFileItem> _recentFiles = new();
+
+    private const int MaxRecentFiles = 10;
+
     public MainWindowViewModel()
     {
+        // Load settings from disk
+        _settingsService = new SettingsService();
+        _appSettings = _settingsService.Load();
+
+        // Apply loaded settings to observable properties
+        _showDocxPreview = _appSettings.ShowDocxPreview;
+        _showSegmentInspector = _appSettings.ShowSegmentInspector;
+        _showMarkdownPreview = _appSettings.ShowMarkdownPreview;
+        _showRawMarkdown = _appSettings.ShowRawMarkdown;
+        _enableStyleBasedHeadingDetection = _appSettings.EnableStyleBasedHeadingDetection;
+        _inferHeadingsFromFormatting = _appSettings.InferHeadingsFromFormatting;
+        _convertUnderlineToEmphasis = _appSettings.ConvertUnderlineToEmphasis;
+        _generateDiagnosticReport = _appSettings.GenerateDiagnosticReport;
+
+        // Sync settings to ConversionSettings object
+        Settings.EnableStyleBasedHeadingDetection = _enableStyleBasedHeadingDetection;
+        Settings.InferHeadingsFromFormatting = _inferHeadingsFromFormatting;
+        Settings.ConvertUnderlineToEmphasis = _convertUnderlineToEmphasis;
+        Settings.GenerateDiagnosticReport = _generateDiagnosticReport;
+
         _converter = new Docx2MdConverter(Settings);
+
+        // Load recent files
+        LoadRecentFiles();
+    }
+
+    private void LoadRecentFiles()
+    {
+        RecentFiles.Clear();
+        foreach (var path in _appSettings.RecentFiles)
+        {
+            RecentFiles.Add(new RecentFileItem { FilePath = path });
+        }
+    }
+
+    private void AddToRecentFiles(string filePath)
+    {
+        // Remove if already exists (will be re-added at top)
+        _appSettings.RecentFiles.Remove(filePath);
+
+        // Add to front
+        _appSettings.RecentFiles.Insert(0, filePath);
+
+        // Trim to max
+        while (_appSettings.RecentFiles.Count > MaxRecentFiles)
+        {
+            _appSettings.RecentFiles.RemoveAt(_appSettings.RecentFiles.Count - 1);
+        }
+
+        _settingsService.Save(_appSettings);
+        LoadRecentFiles();
+    }
+
+    [RelayCommand]
+    private void OpenRecentFile(RecentFileItem? item)
+    {
+        if (item == null) return;
+
+        if (!File.Exists(item.FilePath))
+        {
+            // Remove from list and show error
+            _appSettings.RecentFiles.Remove(item.FilePath);
+            _settingsService.Save(_appSettings);
+            LoadRecentFiles();
+            StatusText = $"File not found: {item.FileName}";
+            return;
+        }
+
+        LoadDocument(item.FilePath);
     }
 
     // View toggle commands
@@ -123,6 +200,21 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleGenerateDiagnosticReport() => GenerateDiagnosticReport = !GenerateDiagnosticReport;
 
+    // Save settings when view toggle properties change
+    partial void OnShowDocxPreviewChanged(bool value) => SaveViewSettings();
+    partial void OnShowSegmentInspectorChanged(bool value) => SaveViewSettings();
+    partial void OnShowMarkdownPreviewChanged(bool value) => SaveViewSettings();
+    partial void OnShowRawMarkdownChanged(bool value) => SaveViewSettings();
+
+    private void SaveViewSettings()
+    {
+        _appSettings.ShowDocxPreview = ShowDocxPreview;
+        _appSettings.ShowSegmentInspector = ShowSegmentInspector;
+        _appSettings.ShowMarkdownPreview = ShowMarkdownPreview;
+        _appSettings.ShowRawMarkdown = ShowRawMarkdown;
+        _settingsService.Save(_appSettings);
+    }
+
     // Reconvert when settings properties change
     partial void OnEnableStyleBasedHeadingDetectionChanged(bool value) => ApplySettingsAndReconvert();
     partial void OnInferHeadingsFromFormattingChanged(bool value) => ApplySettingsAndReconvert();
@@ -136,6 +228,13 @@ public partial class MainWindowViewModel : ViewModelBase
         Settings.InferHeadingsFromFormatting = InferHeadingsFromFormatting;
         Settings.ConvertUnderlineToEmphasis = ConvertUnderlineToEmphasis;
         Settings.GenerateDiagnosticReport = GenerateDiagnosticReport;
+
+        // Save to disk
+        _appSettings.EnableStyleBasedHeadingDetection = EnableStyleBasedHeadingDetection;
+        _appSettings.InferHeadingsFromFormatting = InferHeadingsFromFormatting;
+        _appSettings.ConvertUnderlineToEmphasis = ConvertUnderlineToEmphasis;
+        _appSettings.GenerateDiagnosticReport = GenerateDiagnosticReport;
+        _settingsService.Save(_appSettings);
 
         // Reconvert if document is loaded
         if (_document != null)
@@ -156,10 +255,20 @@ public partial class MainWindowViewModel : ViewModelBase
         GenerateDiagnosticReport = value.GenerateDiagnosticReport;
     }
 
-    partial void OnSelectedSegmentChanged(SegmentViewModel? value)
+    partial void OnSelectedSegmentChanged(SegmentViewModel? oldValue, SegmentViewModel? newValue)
     {
-        // Selection changed - in a full implementation, this would
-        // highlight the selected segment in both DOCX and Markdown previews
+        // Update IsSelected state for visual highlighting in preview panes
+        if (oldValue != null)
+            oldValue.IsSelected = false;
+        if (newValue != null)
+            newValue.IsSelected = true;
+    }
+
+    [RelayCommand]
+    private void SelectSegment(SegmentViewModel? segment)
+    {
+        if (segment != null)
+            SelectedSegment = segment;
     }
 
     private void OnSegmentOverrideChanged(object? sender, EventArgs e)
@@ -271,6 +380,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
             // Update DOCX preview
             UpdateDocxPreview();
+
+            // Add to recent files
+            AddToRecentFiles(filePath);
 
             var diagnosticCount = _document.GetAllDiagnostics().Count();
             StatusText = $"Loaded {Segments.Count} segments. {diagnosticCount} diagnostics.";

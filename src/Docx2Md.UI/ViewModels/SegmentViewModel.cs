@@ -18,6 +18,13 @@ public partial class SegmentViewModel : ViewModelBase
     /// </summary>
     public event EventHandler? OverrideChanged;
 
+    /// <summary>
+    /// Whether this segment is currently selected in the UI.
+    /// Used for visual highlighting in preview panes.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSelected;
+
     public SegmentViewModel(Segment segment)
     {
         _segment = segment ?? throw new ArgumentNullException(nameof(segment));

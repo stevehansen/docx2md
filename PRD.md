@@ -281,13 +281,25 @@ Settings apply globally but may be overridden per segment.
   - Exclude from output
   - Live preview updates when overrides change
 - Theme-aware Markdown preview (tables, headings, text adapt to light/dark mode)
+- Visual segment highlighting across panes:
+  - Click-to-select segments in DOCX preview
+  - Click-to-select segments in raw Markdown view
+  - Synchronized highlighting with segment inspector
+  - Semi-transparent highlight overlay for selected segment
+- Settings persistence between sessions:
+  - Saves to %APPDATA%/docx2md/settings.json
+  - Persists UI state (view toggles, raw/rendered mode)
+  - Persists conversion settings
+  - Debounced auto-save on changes
+- Recent files list:
+  - Tracks last 10 opened documents
+  - File menu submenu with recent files
+  - Handles missing files gracefully
+  - Most recently opened appears first
 
 ### Planned (Future)
 - Rich DOCX visual preview
-- Visual segment highlighting across panes
-- Settings persistence between sessions
 - Drag-and-drop file opening
-- Recent files list
 
 ---
 
