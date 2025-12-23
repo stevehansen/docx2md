@@ -1,0 +1,261 @@
+﻿using System;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using Avalonia.Platform.Storage;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Docx2Md.Core;
+using Docx2Md.Core.Models;
+
+namespace Docx2Md.UI.ViewModels;
+
+public partial class MainWindowViewModel : ViewModelBase
+{
+    private readonly Docx2MdConverter _converter;
+    private DocumentModel? _document;
+    private string _currentFilePath = string.Empty;
+
+    [ObservableProperty]
+    private string _statusText = "Ready. Open a DOCX file to begin.";
+
+    [ObservableProperty]
+    private string _documentTitle = "No document loaded";
+
+    [ObservableProperty]
+    private string _docxPreviewText = "Open a DOCX file to preview its content here.";
+
+    [ObservableProperty]
+    private string _markdownOutput = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<Segment> _segments = new();
+
+    [ObservableProperty]
+    private Segment? _selectedSegment;
+
+    [ObservableProperty]
+    private bool _showDocxPreview = true;
+
+    [ObservableProperty]
+    private bool _showSegmentInspector = true;
+
+    [ObservableProperty]
+    private bool _showMarkdownPreview = true;
+
+    [ObservableProperty]
+    private bool _showRawMarkdown = false;
+
+    [ObservableProperty]
+    private bool _hasDocument = false;
+
+    [ObservableProperty]
+    private ConversionSettings _settings = new();
+
+    public MainWindowViewModel()
+    {
+        _converter = new Docx2MdConverter(Settings);
+    }
+
+    partial void OnSelectedSegmentChanged(Segment? value)
+    {
+        if (value != null)
+        {
+            // Update previews based on selected segment
+            UpdatePreviews();
+        }
+    }
+
+    [RelayCommand]
+    private async Task OpenFileAsync()
+    {
+        try
+        {
+            // In a real implementation, we would use the platform's file picker
+            // For now, we'll simulate with a hardcoded path
+            StatusText = "Opening file...";
+            
+            // This is a placeholder - actual implementation would use FileOpenPicker
+            // var file = await ShowFileOpenDialog();
+            // For now, just update status
+            StatusText = "File dialog would appear here. Use the Export function to test conversion.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportMarkdownAsync()
+    {
+        if (!HasDocument || _document == null)
+        {
+            StatusText = "No document loaded to export.";
+            return;
+        }
+
+        try
+        {
+            StatusText = "Exporting Markdown...";
+            
+            // This is a placeholder - actual implementation would use FileSavePicker
+            StatusText = "Export dialog would appear here.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error exporting: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void Exit()
+    {
+        // Exit application
+        System.Environment.Exit(0);
+    }
+
+    private void LoadDocument(string filePath)
+    {
+        try
+        {
+            StatusText = $"Loading {Path.GetFileName(filePath)}...";
+
+            // Parse and convert the document
+            _document = _converter.ParseFile(filePath);
+            _converter.ConvertDocument(_document);
+            _currentFilePath = filePath;
+
+            // Update UI
+            DocumentTitle = Path.GetFileName(filePath);
+            HasDocument = true;
+
+            // Load segments
+            Segments.Clear();
+            foreach (var segment in _document.Segments)
+            {
+                Segments.Add(segment);
+            }
+
+            // Generate markdown output
+            UpdateMarkdownOutput();
+
+            // Update DOCX preview
+            UpdateDocxPreview();
+
+            var diagnosticCount = _document.GetAllDiagnostics().Count();
+            StatusText = $"Loaded {Segments.Count} segments. {diagnosticCount} diagnostics.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error loading document: {ex.Message}";
+            HasDocument = false;
+        }
+    }
+
+    private void UpdateMarkdownOutput()
+    {
+        if (_document == null)
+        {
+            MarkdownOutput = string.Empty;
+            return;
+        }
+
+        // Concatenate all segment markdown outputs
+        var markdown = string.Join("\n\n", 
+            _document.Segments
+                .Where(s => !s.ExcludeFromOutput)
+                .Select(s => s.EffectiveMarkdown));
+
+        MarkdownOutput = markdown;
+    }
+
+    private void UpdateDocxPreview()
+    {
+        if (_document == null)
+        {
+            DocxPreviewText = "Open a DOCX file to preview its content here.";
+            return;
+        }
+
+        // Simple text representation of the document
+        var preview = string.Join("\n\n",
+            _document.Segments.Select(s => 
+                $"[{s.Type}] {s.Content}"));
+
+        DocxPreviewText = preview;
+    }
+
+    private void UpdatePreviews()
+    {
+        // Update both previews based on the selected segment
+        // This is a simplified version - a full implementation would
+        // highlight the selected segment in both DOCX and Markdown previews
+    }
+
+    // Method to load a sample document for testing
+    public void LoadSampleDocument()
+    {
+        // Create a sample document for demonstration
+        _document = new DocumentModel();
+        
+        var segment1 = new Segment
+        {
+            OrderIndex = 0,
+            Type = SegmentType.Heading,
+            Content = "Sample Document",
+            MarkdownOutput = "# Sample Document",
+            Metadata = new SourceMetadata { StyleName = "Heading 1", OutlineLevel = 1 }
+        };
+
+        var segment2 = new Segment
+        {
+            OrderIndex = 1,
+            Type = SegmentType.Paragraph,
+            Content = "This is a sample paragraph demonstrating the DOCX to Markdown conversion workbench.",
+            MarkdownOutput = "This is a sample paragraph demonstrating the DOCX to Markdown conversion workbench.",
+            Metadata = new SourceMetadata { StyleName = "Normal" }
+        };
+
+        var segment3 = new Segment
+        {
+            OrderIndex = 2,
+            Type = SegmentType.Heading,
+            Content = "Features",
+            MarkdownOutput = "## Features",
+            Metadata = new SourceMetadata { StyleName = "Heading 2", OutlineLevel = 2 }
+        };
+
+        var segment4 = new Segment
+        {
+            OrderIndex = 3,
+            Type = SegmentType.ListItem,
+            Content = "Three-pane workbench layout",
+            MarkdownOutput = "- Three-pane workbench layout",
+            Metadata = new SourceMetadata { StyleName = "List Paragraph" }
+        };
+
+        segment4.AddDiagnostic(DiagnosticLevel.Info, "LIST_DETECTED", "List item detected and converted to Markdown");
+
+        _document.Segments.Add(segment1);
+        _document.Segments.Add(segment2);
+        _document.Segments.Add(segment3);
+        _document.Segments.Add(segment4);
+
+        DocumentTitle = "Sample Document";
+        HasDocument = true;
+
+        Segments.Clear();
+        foreach (var segment in _document.Segments)
+        {
+            Segments.Add(segment);
+        }
+
+        UpdateMarkdownOutput();
+        UpdateDocxPreview();
+
+        StatusText = "Sample document loaded for demonstration.";
+    }
+}
