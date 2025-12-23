@@ -68,7 +68,25 @@ public class Segment
     /// <summary>
     /// Get effective markdown output (considering overrides)
     /// </summary>
-    public string EffectiveMarkdown => ManualMarkdownOverride ?? MarkdownOutput;
+    public string EffectiveMarkdown
+    {
+        get
+        {
+            // Manual override takes highest priority
+            if (!string.IsNullOrEmpty(ManualMarkdownOverride))
+                return ManualMarkdownOverride;
+
+            // If heading level is overridden and this is a heading, regenerate the markdown
+            if (OverrideHeadingLevel.HasValue && EffectiveType == SegmentType.Heading)
+            {
+                var level = Math.Clamp(OverrideHeadingLevel.Value, 1, 6);
+                var prefix = new string('#', level);
+                return $"{prefix} {Content}";
+            }
+
+            return MarkdownOutput;
+        }
+    }
 
     /// <summary>
     /// Add a diagnostic to this segment

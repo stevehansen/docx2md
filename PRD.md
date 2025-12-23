@@ -265,11 +265,16 @@ Settings apply globally but may be overridden per segment.
 - Markdown conversion and export
 - Diagnostic report generation
 - Unsupported feature detection (headers/footers, comments, track changes, etc.)
+- Full override UI controls:
+  - Heading level override (H1-H6)
+  - Segment type override
+  - Manual markdown override
+  - Exclude from output
+  - Live preview updates when overrides change
 
 ### Planned (Future)
 - Rich DOCX visual preview
 - Visual segment highlighting across panes
-- Full override UI controls (heading level, type change)
 - Settings persistence between sessions
 - Drag-and-drop file opening
 - Recent files list

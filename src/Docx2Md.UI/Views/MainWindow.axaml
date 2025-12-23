@@ -139,12 +139,58 @@
                               CanUserResizeColumns="True">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="#" Binding="{Binding OrderIndex}" Width="50" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Type" Binding="{Binding EffectiveType}" Width="100" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Style" Binding="{Binding Metadata.StyleName}" Width="120" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Content" Binding="{Binding Content}" Width="200" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Markdown" Binding="{Binding EffectiveMarkdown}" Width="200" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Diagnostics" Binding="{Binding Diagnostics.Count}" Width="100" IsReadOnly="True" />
-                            <DataGridCheckBoxColumn Header="Exclude" Binding="{Binding ExcludeFromOutput}" Width="80" />
+                            <DataGridTextColumn Header="Type" Binding="{Binding EffectiveType}" Width="80" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Style" Binding="{Binding Metadata.StyleName}" Width="100" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Content" Binding="{Binding Content}" Width="150" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Markdown" Binding="{Binding EffectiveMarkdown}" Width="150" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Diag" Binding="{Binding DiagnosticCount}" Width="50" IsReadOnly="True" />
+                            <DataGridCheckBoxColumn Header="Exclude" Binding="{Binding ExcludeFromOutput}" Width="70" />
+                            <!-- Override Controls -->
+                            <DataGridTemplateColumn Header="H-Level" Width="90">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AvailableHeadingLevels}"
+                                                  SelectedItem="{Binding OverrideHeadingLevel}"
+                                                  HorizontalAlignment="Stretch"
+                                                  Padding="4,2"
+                                                  MinHeight="24">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={x:Static conv:HeadingLevelDisplayConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Type Override" Width="110">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AvailableSegmentTypes}"
+                                                  SelectedItem="{Binding OverrideType}"
+                                                  HorizontalAlignment="Stretch"
+                                                  Padding="4,2"
+                                                  MinHeight="24">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={x:Static conv:SegmentTypeDisplayConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Manual Markdown" Width="200">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding ManualMarkdownOverride}"
+                                                 Watermark="(use converted)"
+                                                 HorizontalAlignment="Stretch"
+                                                 Padding="4,2"
+                                                 MinHeight="24" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>

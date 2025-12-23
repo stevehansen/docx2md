@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -24,6 +25,27 @@ public partial class MainWindowViewModel : ViewModelBase
     public Func<Task<string?>>? ShowOpenFileDialog { get; set; }
     public Func<Task<string?>>? ShowSaveFileDialog { get; set; }
 
+    /// <summary>
+    /// Available heading levels for override ComboBox (null = use original)
+    /// </summary>
+    public static List<int?> AvailableHeadingLevels { get; } = new() { null, 1, 2, 3, 4, 5, 6 };
+
+    /// <summary>
+    /// Available segment types for override ComboBox (null = use original)
+    /// </summary>
+    public static List<SegmentType?> AvailableSegmentTypes { get; } = new()
+    {
+        null,
+        SegmentType.Heading,
+        SegmentType.Paragraph,
+        SegmentType.ListItem,
+        SegmentType.Table,
+        SegmentType.Image,
+        SegmentType.PageBreak,
+        SegmentType.SectionBreak,
+        SegmentType.Unknown
+    };
+
     [ObservableProperty]
     private string _statusText = "Ready. Open a DOCX file to begin.";
 
@@ -37,10 +59,10 @@ public partial class MainWindowViewModel : ViewModelBase
     private string _markdownOutput = string.Empty;
 
     [ObservableProperty]
-    private ObservableCollection<Segment> _segments = new();
+    private ObservableCollection<SegmentViewModel> _segments = new();
 
     [ObservableProperty]
-    private Segment? _selectedSegment;
+    private SegmentViewModel? _selectedSegment;
 
     [ObservableProperty]
     private bool _showDocxPreview = true;
@@ -134,10 +156,16 @@ public partial class MainWindowViewModel : ViewModelBase
         GenerateDiagnosticReport = value.GenerateDiagnosticReport;
     }
 
-    partial void OnSelectedSegmentChanged(Segment? value)
+    partial void OnSelectedSegmentChanged(SegmentViewModel? value)
     {
         // Selection changed - in a full implementation, this would
         // highlight the selected segment in both DOCX and Markdown previews
+    }
+
+    private void OnSegmentOverrideChanged(object? sender, EventArgs e)
+    {
+        // Regenerate markdown when any segment override changes
+        UpdateMarkdownOutput();
     }
 
     [RelayCommand]
@@ -223,11 +251,19 @@ public partial class MainWindowViewModel : ViewModelBase
             DocumentTitle = Path.GetFileName(filePath);
             HasDocument = true;
 
-            // Load segments
+            // Unsubscribe from old segments
+            foreach (var vm in Segments)
+            {
+                vm.OverrideChanged -= OnSegmentOverrideChanged;
+            }
+
+            // Load segments wrapped in ViewModels
             Segments.Clear();
             foreach (var segment in _document.Segments)
             {
-                Segments.Add(segment);
+                var vm = new SegmentViewModel(segment);
+                vm.OverrideChanged += OnSegmentOverrideChanged;
+                Segments.Add(vm);
             }
 
             // Generate markdown output
@@ -254,9 +290,9 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        // Concatenate all segment markdown outputs
-        var markdown = string.Join("\n\n", 
-            _document.Segments
+        // Concatenate all segment markdown outputs (using SegmentViewModel properties)
+        var markdown = string.Join("\n\n",
+            Segments
                 .Where(s => !s.ExcludeFromOutput)
                 .Select(s => s.EffectiveMarkdown));
 
@@ -282,9 +318,15 @@ public partial class MainWindowViewModel : ViewModelBase
     // Method to load a sample document for testing
     public void LoadSampleDocument()
     {
+        // Unsubscribe from old segments
+        foreach (var vm in Segments)
+        {
+            vm.OverrideChanged -= OnSegmentOverrideChanged;
+        }
+
         // Create a sample document for demonstration
         _document = new DocumentModel();
-        
+
         var segment1 = new Segment
         {
             OrderIndex = 0,
@@ -334,7 +376,9 @@ public partial class MainWindowViewModel : ViewModelBase
         Segments.Clear();
         foreach (var segment in _document.Segments)
         {
-            Segments.Add(segment);
+            var vm = new SegmentViewModel(segment);
+            vm.OverrideChanged += OnSegmentOverrideChanged;
+            Segments.Add(vm);
         }
 
         UpdateMarkdownOutput();
