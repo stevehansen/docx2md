@@ -17,10 +17,11 @@ A professional DOCX to Markdown conversion tool with transparency, control, and 
 
 ## Architecture
 
-The project consists of three main components:
+The project consists of four main components:
 
 - **Docx2Md.Core** - Core library with parsing, conversion, and export logic
 - **Docx2Md.Cli** - Command-line interface for batch conversion
+- **Docx2Md.UI** - Cross-platform desktop UI with three-pane workbench (Avalonia-based)
 - **Docx2Md.Tests** - Unit tests for core functionality
 
 ## Getting Started
@@ -52,6 +53,25 @@ dotnet run --project src/Docx2Md.Cli/Docx2Md.Cli.csproj document.docx output.md
 ```
 
 ## Usage
+
+### Desktop UI
+
+The desktop application provides a three-pane workbench interface as specified in the PRD:
+
+```bash
+# Run the UI application
+dotnet run --project src/Docx2Md.UI/Docx2Md.UI.csproj
+```
+
+**Features:**
+- **Left Pane**: DOCX preview (read-only view of original document)
+- **Middle Pane**: Segment inspector with detailed view of each document segment
+  - View segment type, style, content, and diagnostics
+  - Toggle segment inclusion/exclusion
+  - Override segment properties
+- **Right Pane**: Markdown preview with toggle between rendered and raw view
+- **Menu Bar**: File operations (Open, Export), View toggles, and Settings
+- Cross-platform support (Windows, macOS, Linux) via Avalonia
 
 ### Command Line
 
@@ -204,7 +224,11 @@ docx2md/
 │   │   ├── Conversion/         # Markdown converter
 │   │   ├── Diagnostics/        # Diagnostic codes
 │   │   └── Export/             # Export functionality
-│   └── Docx2Md.Cli/            # CLI application
+│   ├── Docx2Md.Cli/            # CLI application
+│   └── Docx2Md.UI/             # Desktop UI (Avalonia)
+│       ├── Views/              # UI views
+│       ├── ViewModels/         # View models (MVVM)
+│       └── Assets/             # UI assets
 ├── tests/
 │   └── Docx2Md.Tests/          # Unit tests
 ├── PRD.md                      # Product Requirements Document
@@ -222,10 +246,12 @@ See [LICENSE](LICENSE) for details.
 ## Future Enhancements
 
 Planned features (see PRD.md for details):
-- WPF desktop application with three-pane workbench UI
-- Interactive segment inspector
-- Live Markdown preview
-- Per-segment manual overrides
+- ✅ Cross-platform desktop UI with three-pane workbench (Avalonia) - **COMPLETED**
+- ✅ Interactive segment inspector - **COMPLETED**
+- ✅ Live Markdown preview - **COMPLETED**
+- ✅ Per-segment manual overrides - **COMPLETED**
+- Advanced DOCX rendering in preview pane
+- Enhanced segment highlighting and synchronization
 - Advanced table conversion
 - Enhanced list numbering support
 - Custom conversion rule plugins
