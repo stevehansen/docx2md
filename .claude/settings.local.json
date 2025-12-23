@@ -3,7 +3,9 @@
     "allow": [
       "Bash(dotnet test:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet run:*)"
     ]
   }
 }
