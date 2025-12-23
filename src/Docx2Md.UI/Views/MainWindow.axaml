@@ -5,6 +5,7 @@
          xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
          xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
          xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
+         xmlns:ctxt="clr-namespace:ColorTextBlock.Avalonia;assembly=ColorTextBlock.Avalonia"
          xmlns:suki="https://github.com/kikipoulet/SukiUI"
          mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
          x:Class="Docx2Md.UI.Views.MainWindow"
@@ -173,11 +174,30 @@
                             <md:MarkdownScrollViewer Markdown="{Binding MarkdownOutput}"
                                                      IsVisible="{Binding !ShowRawMarkdown}">
                                 <md:MarkdownScrollViewer.Styles>
-                                    <!-- Style all text to use theme text color -->
-                                    <Style Selector="TextBlock">
+                                    <!-- Style headings to use theme text color -->
+                                    <Style Selector="ctxt|CTextBlock.Heading1">
                                         <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
                                     </Style>
-                                    <Style Selector="Run">
+                                    <Style Selector="ctxt|CTextBlock.Heading2">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                    </Style>
+                                    <Style Selector="ctxt|CTextBlock.Heading3">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                    </Style>
+                                    <Style Selector="ctxt|CTextBlock.Heading4">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                    </Style>
+                                    <Style Selector="ctxt|CTextBlock.Heading5">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                    </Style>
+                                    <Style Selector="ctxt|CTextBlock.Heading6">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                    </Style>
+                                    <!-- Style all other text -->
+                                    <Style Selector="ctxt|CTextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
+                                    </Style>
+                                    <Style Selector="TextBlock">
                                         <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
                                     </Style>
                                 </md:MarkdownScrollViewer.Styles>
