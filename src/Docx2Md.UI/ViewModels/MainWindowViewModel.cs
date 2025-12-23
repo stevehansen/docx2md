@@ -291,10 +291,12 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         // Concatenate all segment markdown outputs (using SegmentViewModel properties)
+        // Filter out excluded segments and empty paragraphs (common in Word for spacing)
         var markdown = string.Join("\n\n",
             Segments
                 .Where(s => !s.ExcludeFromOutput)
-                .Select(s => s.EffectiveMarkdown));
+                .Select(s => s.EffectiveMarkdown)
+                .Where(md => !string.IsNullOrWhiteSpace(md)));
 
         MarkdownOutput = markdown;
     }
