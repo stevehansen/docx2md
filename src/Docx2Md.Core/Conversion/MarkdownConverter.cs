@@ -178,11 +178,35 @@ public class MarkdownConverter
 
     private string ConvertImage(Segment segment, DocumentModel document)
     {
-        // Find image by relationship ID or create placeholder
-        var altText = segment.Content.Length > 0 ? segment.Content : "Image";
-        
-        // Generate relative image path
-        var imageName = $"image_{segment.OrderIndex}.png";
+        // Get alt text from segment content or use default
+        var altText = !string.IsNullOrEmpty(segment.Content) ? segment.Content : "Image";
+
+        // Try to find image by relationship ID
+        string imageName;
+        if (segment.Metadata.AdditionalProperties.TryGetValue("ImageRelationshipId", out var rIdObj) &&
+            rIdObj is string relationshipId)
+        {
+            var imageInfo = document.Images.FirstOrDefault(img => img.RelationshipId == relationshipId);
+            if (imageInfo != null)
+            {
+                imageName = imageInfo.GetFileName();
+            }
+            else
+            {
+                // Image not found in document - use fallback name
+                imageName = $"image_{segment.OrderIndex}.png";
+                segment.AddDiagnostic(
+                    DiagnosticLevel.Warning,
+                    Diagnostics.DiagnosticCodes.IMAGE_EXTRACTION_FAILED,
+                    $"Image with relationship ID '{relationshipId}' not found");
+            }
+        }
+        else
+        {
+            // No relationship ID - use fallback name
+            imageName = $"image_{segment.OrderIndex}.png";
+        }
+
         var imagePath = $"{_settings.ImageOutputFolder}/{imageName}";
 
         if (string.IsNullOrEmpty(segment.Content))

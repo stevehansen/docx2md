@@ -253,11 +253,39 @@ public class DocxParser
 
     private void ProcessInlineImages(Paragraph paragraph, Segment segment, WordprocessingDocument wordDoc)
     {
-        var drawings = paragraph.Descendants<DocumentFormat.OpenXml.Drawing.Blip>();
-        if (drawings.Any())
+        // Look for Drawing elements which contain images
+        var drawings = paragraph.Descendants<Drawing.Blip>().ToList();
+        if (!drawings.Any())
+            return;
+
+        // Get the first image's relationship ID
+        var firstBlip = drawings.First();
+        var embedId = firstBlip.Embed?.Value;
+
+        if (!string.IsNullOrEmpty(embedId))
         {
             segment.Type = SegmentType.Image;
-            // Image relationship IDs would be stored in metadata
+            segment.Metadata.AdditionalProperties["ImageRelationshipId"] = embedId;
+
+            // Try to extract alt text from DocPr (Document Properties) element
+            var docPr = paragraph.Descendants<DrawingWp.DocProperties>().FirstOrDefault();
+            if (docPr != null)
+            {
+                var altText = docPr.Description?.Value ?? docPr.Name?.Value;
+                if (!string.IsNullOrEmpty(altText))
+                {
+                    segment.Content = altText;
+                }
+            }
+
+            // If multiple images in paragraph, add diagnostic
+            if (drawings.Count > 1)
+            {
+                segment.AddDiagnostic(
+                    DiagnosticLevel.Info,
+                    Diagnostics.DiagnosticCodes.IMAGE_ALT_TEXT_MISSING,
+                    $"Paragraph contains {drawings.Count} images. Only the first is converted.");
+            }
         }
     }
 
