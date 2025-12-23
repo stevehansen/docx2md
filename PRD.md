@@ -298,8 +298,27 @@ Settings apply globally but may be overridden per segment.
   - Most recently opened appears first
 
 ### Planned (Future)
+
+#### UI & Productivity
 - Rich DOCX visual preview
 - Drag-and-drop file opening
+- Keyboard shortcuts for segment navigation, view toggles, and override application
+- Copy to clipboard without full export
+- Search/filter segments by type, content, or diagnostic status
+- Bulk override operations (apply same override to multiple selected segments)
+- Undo/redo for override changes
+- Document statistics panel (word count, segment breakdown, diagnostic summary)
+- Diff view (side-by-side comparison of original text vs Markdown output)
+
+#### Conversion Quality
+- Code block detection (monospace/Courier New text → fenced code blocks)
+- Custom style mappings (user-defined Word style → Markdown output rules)
+- Footnote/endnote conversion to Markdown footnotes `[^1]`
+- Hyperlink preservation (Word hyperlinks → `[text](url)`)
+
+#### Workflow Integration
+- Front matter templates (YAML/TOML for static site generators like Hugo, Jekyll, Docusaurus)
+- Project files (save overrides and settings per document for re-processing)
 
 ---
 
