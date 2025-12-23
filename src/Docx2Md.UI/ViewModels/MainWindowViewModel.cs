@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -63,13 +65,23 @@ public partial class MainWindowViewModel : ViewModelBase
         _converter = new Docx2MdConverter(Settings);
     }
 
+    partial void OnSettingsChanged(ConversionSettings value)
+    {
+        // When settings change, reconvert the document if one is loaded
+        if (_document != null)
+        {
+            // Reconvert with new settings
+            var newConverter = new Docx2MdConverter(value);
+            newConverter.ConvertDocument(_document);
+            UpdateMarkdownOutput();
+            StatusText = "Document reconverted with new settings.";
+        }
+    }
+
     partial void OnSelectedSegmentChanged(Segment? value)
     {
-        if (value != null)
-        {
-            // Update previews based on selected segment
-            UpdatePreviews();
-        }
+        // Selection changed - in a full implementation, this would
+        // highlight the selected segment in both DOCX and Markdown previews
     }
 
     [RelayCommand]
@@ -133,8 +145,11 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void Exit()
     {
-        // Exit application
-        System.Environment.Exit(0);
+        // Use Avalonia's proper shutdown mechanism
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime lifetime)
+        {
+            lifetime.Shutdown();
+        }
     }
 
     private void LoadDocument(string filePath)
@@ -206,13 +221,6 @@ public partial class MainWindowViewModel : ViewModelBase
                 $"[{s.Type}] {s.Content}"));
 
         DocxPreviewText = preview;
-    }
-
-    private void UpdatePreviews()
-    {
-        // Update both previews based on the selected segment
-        // This is a simplified version - a full implementation would
-        // highlight the selected segment in both DOCX and Markdown previews
     }
 
     // Method to load a sample document for testing
