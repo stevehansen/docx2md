@@ -1,15 +1,16 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:Docx2Md.UI.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
-        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
-        x:Class="Docx2Md.UI.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="DOCX → Markdown Translation Workbench"
-        Width="1200" Height="700">
+<suki:SukiWindow xmlns="https://github.com/avaloniaui"
+         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+         xmlns:vm="using:Docx2Md.UI.ViewModels"
+         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+         xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
+         xmlns:suki="https://github.com/kikipoulet/SukiUI"
+         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+         x:Class="Docx2Md.UI.Views.MainWindow"
+         x:DataType="vm:MainWindowViewModel"
+         Icon="/Assets/avalonia-logo.ico"
+         Title="DOCX → Markdown Translation Workbench"
+         Width="1200" Height="700">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
@@ -122,4 +123,4 @@
         </Grid>
     </DockPanel>
 
-</Window>
+</suki:SukiWindow>
