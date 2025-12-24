@@ -121,6 +121,12 @@ public class MarkdownConverter
         var prefix = new string('#', level);
         var content = ProcessInlineFormatting(segment);
 
+        // Prepend resolved numbering prefix if available and setting is enabled
+        if (_settings.IncludeHeadingNumbers && !string.IsNullOrEmpty(segment.Metadata.ResolvedNumberingPrefix))
+        {
+            content = segment.Metadata.ResolvedNumberingPrefix + " " + content;
+        }
+
         if (_settings.InferHeadingsFromFormatting && level > 1)
         {
             segment.AddDiagnostic(
@@ -211,6 +217,13 @@ public class MarkdownConverter
         var indent = new string(' ', level * 2);
         var content = ProcessInlineFormatting(segment);
 
+        // Check for article-style lists that should become paragraphs with prefix
+        if (_settings.ConvertPrefixedListsToParagraphs && IsArticleStyleList(segment))
+        {
+            var prefix = segment.Metadata.ResolvedNumberingPrefix ?? "";
+            return $"{prefix} {content}".Trim();
+        }
+
         if (segment.Metadata.IsNumberedList)
         {
             // Numbered list - use actual item number from parsing
@@ -222,6 +235,28 @@ public class MarkdownConverter
             // Bulleted list
             return $"{indent}- {content}";
         }
+    }
+
+    /// <summary>
+    /// Check if a list item has an article-style LevelText format
+    /// (contains text before/after placeholder, not just "%1." or "%1)")
+    /// </summary>
+    private static bool IsArticleStyleList(Segment segment)
+    {
+        // Only numbered lists can be article-style (not bullet lists)
+        if (!segment.Metadata.IsNumberedList)
+            return false;
+
+        var levelText = segment.Metadata.LevelTextFormat;
+        if (string.IsNullOrEmpty(levelText))
+            return false;
+
+        // Article-style: has ASCII letters before/after placeholder (e.g., "Article %1", "Section %1")
+        // Only count actual letters, not special bullet characters or symbols
+        var withoutPlaceholders = System.Text.RegularExpressions.Regex.Replace(levelText, @"%\d+", "");
+
+        // Check if there are any ASCII letters (a-z, A-Z) remaining
+        return withoutPlaceholders.Any(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
     }
 
     private string ConvertTable(Segment segment)

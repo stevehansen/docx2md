@@ -101,6 +101,18 @@ public class ConversionSettings
     public FrontMatterTemplate? FrontMatterTemplate { get; set; }
 
     /// <summary>
+    /// Include resolved numbering prefix in heading output
+    /// (e.g., "# 11 INCIDENT MANAGEMENT" instead of "# INCIDENT MANAGEMENT")
+    /// </summary>
+    public bool IncludeHeadingNumbers { get; set; } = true;
+
+    /// <summary>
+    /// Convert list items with custom LevelText prefixes (like "Article %1") to paragraphs
+    /// with the prefix prepended, rather than Markdown list items
+    /// </summary>
+    public bool ConvertPrefixedListsToParagraphs { get; set; } = true;
+
+    /// <summary>
     /// Create default settings
     /// </summary>
     public static ConversionSettings Default => new ConversionSettings();

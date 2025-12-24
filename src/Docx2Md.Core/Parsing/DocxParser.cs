@@ -65,67 +65,125 @@ public class DocxParser
 
             // Detect unsupported features
             DetectUnsupportedFeatures(wordDoc, document);
-        }
 
-        // Calculate list item numbers after all segments are parsed
-        CalculateListItemNumbers(document);
+            // Activate style-based numbering for headings after the first numbered one
+            // This handles Word's "from here on" behavior for outline numbering
+            ActivateStyleNumbering(document, wordDoc);
+
+            // Calculate list item numbers and resolve numbering prefixes after all segments are parsed
+            CalculateListItemNumbers(document, wordDoc);
+        }
 
         return document;
     }
 
     /// <summary>
-    /// Calculate sequential list item numbers for numbered lists
+    /// Activate style-based numbering for headings after the first numbered heading.
+    /// Word has a "from here on" behavior where front-matter headings don't have numbers,
+    /// but once outline numbering starts, subsequent headings continue the sequence.
     /// </summary>
-    private void CalculateListItemNumbers(DocumentModel document)
+    private void ActivateStyleNumbering(DocumentModel document, WordprocessingDocument wordDoc)
     {
-        // Track counters per (numId, level) combination
-        var listCounters = new Dictionary<(string numId, int level), int>();
-        string? previousNumId = null;
-        int previousLevel = -1;
+        // First, find the index where numbering "starts" (first heading with explicit numbering)
+        int numberingStartIndex = -1;
+        for (int i = 0; i < document.Segments.Count; i++)
+        {
+            var seg = document.Segments[i];
+            if (seg.Type == SegmentType.Heading && !string.IsNullOrEmpty(seg.Metadata.NumberingId))
+            {
+                numberingStartIndex = i;
+                break;
+            }
+        }
+
+        // If no heading has explicit numbering, nothing to activate
+        if (numberingStartIndex < 0)
+            return;
+
+        // Cache style numbering info for styles that have numbering defined
+        var styleNumberingInfo = new Dictionary<string, (int numId, int level)>();
+
+        // Second pass: for headings after the start index, apply style numbering if not already set
+        for (int i = numberingStartIndex; i < document.Segments.Count; i++)
+        {
+            var segment = document.Segments[i];
+            if (segment.Type != SegmentType.Heading)
+                continue;
+
+            var styleName = segment.Metadata.StyleName;
+            if (string.IsNullOrEmpty(styleName))
+                continue;
+
+            // Skip headings that have explicitly disabled numbering (numId=0)
+            if (segment.Metadata.NumberingExplicitlyDisabled)
+                continue;
+
+            // If this heading already has numbering, cache it for this style
+            if (!string.IsNullOrEmpty(segment.Metadata.NumberingId) &&
+                int.TryParse(segment.Metadata.NumberingId, out var numId))
+            {
+                var level = segment.Metadata.NumberingLevel ?? 0;
+                styleNumberingInfo[styleName] = (numId, level);
+            }
+            // If this heading doesn't have numbering, try to get it from style definition or cache
+            else
+            {
+                // First check our cache (from previously seen headings of this style)
+                if (styleNumberingInfo.TryGetValue(styleName, out var cachedInfo))
+                {
+                    segment.Metadata.NumberingId = cachedInfo.numId.ToString();
+                    segment.Metadata.NumberingLevel = cachedInfo.level;
+                    DetectNumberingFormatFromValues(wordDoc, segment, cachedInfo.numId, cachedInfo.level);
+                }
+                // Otherwise, check the style definition
+                else
+                {
+                    var styleNumPr = GetStyleNumberingProperties(styleName, wordDoc);
+                    if (styleNumPr != null)
+                    {
+                        segment.Metadata.NumberingId = styleNumPr.Value.numId.ToString();
+                        segment.Metadata.NumberingLevel = styleNumPr.Value.level;
+                        DetectNumberingFormatFromValues(wordDoc, segment, styleNumPr.Value.numId, styleNumPr.Value.level);
+
+                        // Cache for future headings of this style
+                        styleNumberingInfo[styleName] = styleNumPr.Value;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Calculate sequential list item numbers and resolve numbering prefixes for lists and headings
+    /// </summary>
+    private void CalculateListItemNumbers(DocumentModel document, WordprocessingDocument wordDoc)
+    {
+        var resolver = new NumberingResolver(wordDoc);
 
         foreach (var segment in document.Segments)
         {
-            if (segment.Type != SegmentType.ListItem ||
-                !segment.Metadata.IsNumberedList ||
-                string.IsNullOrEmpty(segment.Metadata.NumberingId))
-            {
-                // Reset when we exit a list
-                if (segment.Type != SegmentType.ListItem)
-                {
-                    previousNumId = null;
-                    previousLevel = -1;
-                }
+            // Process both list items and headings that have numbering
+            if (string.IsNullOrEmpty(segment.Metadata.NumberingId))
                 continue;
-            }
 
-            var numId = segment.Metadata.NumberingId;
+            if (!int.TryParse(segment.Metadata.NumberingId, out var numId))
+                continue;
+
             var level = segment.Metadata.NumberingLevel ?? 0;
-            var key = (numId, level);
 
-            // Check if this is a new list or continuing an existing one
-            bool isNewList = numId != previousNumId;
-            bool isLevelChange = level != previousLevel;
-
-            if (isNewList || !listCounters.ContainsKey(key))
+            // Get level info and resolve the numbering prefix
+            var levelInfo = resolver.GetLevelInfo(numId, level);
+            if (levelInfo != null)
             {
-                // Start new counter at this level with start value (default 1)
-                var startValue = segment.Metadata.NumberingStartValue ?? 1;
-                listCounters[key] = startValue;
-            }
-            else if (isLevelChange && level < previousLevel)
-            {
-                // Returning to a parent level - don't reset, continue numbering
-            }
-            else if (!isLevelChange)
-            {
-                // Same level, same list - increment
-                listCounters[key]++;
-            }
+                segment.Metadata.ResolvedNumberingPrefix = resolver.ResolveNumberingPrefix(numId, level, levelInfo, segment.Type);
+                segment.Metadata.ListItemNumber = resolver.GetCurrentCount(numId, level);
 
-            segment.Metadata.ListItemNumber = listCounters[key];
-
-            previousNumId = numId;
-            previousLevel = level;
+                // Also store the LevelText if not already set
+                if (string.IsNullOrEmpty(segment.Metadata.LevelTextFormat))
+                {
+                    segment.Metadata.LevelTextFormat = levelInfo.LevelText;
+                }
+            }
         }
     }
 
@@ -448,15 +506,113 @@ public class DocxParser
             }
         }
 
+        // Check for numbering on the paragraph
         var numPr = paragraph.ParagraphProperties?.NumberingProperties;
         if (numPr != null)
         {
-            segment.Metadata.NumberingId = numPr.NumberingId?.Val?.Value.ToString();
-            segment.Metadata.NumberingLevel = numPr.NumberingLevelReference?.Val?.Value;
+            var numId = numPr.NumberingId?.Val?.Value;
 
-            // Detect numbered vs bulleted list from numbering definition
-            DetectNumberingFormat(wordDoc, segment, numPr);
+            // numId of 0 means "explicitly no numbering" (overrides style numbering)
+            if (numId.HasValue && numId.Value != 0)
+            {
+                segment.Metadata.NumberingId = numId.Value.ToString();
+                segment.Metadata.NumberingLevel = numPr.NumberingLevelReference?.Val?.Value;
+
+                // Detect numbered vs bulleted list from numbering definition
+                DetectNumberingFormat(wordDoc, segment, numPr);
+            }
+            else if (numId.HasValue && numId.Value == 0)
+            {
+                // Mark that numbering is explicitly disabled (don't apply style numbering later)
+                segment.Metadata.NumberingExplicitlyDisabled = true;
+            }
         }
+        // Note: Style-based numbering continuation is handled in a second pass
+        // (see ActivateStyleNumbering) to properly handle the "from here on" behavior
+        // where front-matter headings don't have numbers but content headings do.
+    }
+
+    /// <summary>
+    /// Get numbering properties from a style definition (used for heading styles with numbering)
+    /// </summary>
+    private (int numId, int level)? GetStyleNumberingProperties(string styleId, WordprocessingDocument wordDoc)
+    {
+        var stylesPart = wordDoc.MainDocumentPart?.StyleDefinitionsPart;
+        if (stylesPart?.Styles == null)
+            return null;
+
+        var style = stylesPart.Styles.Elements<Style>()
+            .FirstOrDefault(s => s.StyleId?.Value == styleId);
+
+        if (style == null)
+            return null;
+
+        // Check if this style has numbering properties
+        var numPr = style.StyleParagraphProperties?.NumberingProperties;
+        if (numPr != null)
+        {
+            var numId = numPr.NumberingId?.Val?.Value;
+            var level = numPr.NumberingLevelReference?.Val?.Value ?? 0;
+
+            if (numId.HasValue)
+                return (numId.Value, level);
+        }
+
+        // Check if based on another style
+        var basedOnStyleId = style.BasedOn?.Val?.Value;
+        if (!string.IsNullOrEmpty(basedOnStyleId))
+        {
+            return GetStyleNumberingProperties(basedOnStyleId, wordDoc);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Detect numbering format using numId and level values directly
+    /// </summary>
+    private void DetectNumberingFormatFromValues(WordprocessingDocument wordDoc, Segment segment, int numId, int levelIndex)
+    {
+        var numberingPart = wordDoc.MainDocumentPart?.NumberingDefinitionsPart;
+        if (numberingPart?.Numbering == null)
+            return;
+
+        // Find the numbering instance
+        var numberingInstance = numberingPart.Numbering
+            .Elements<NumberingInstance>()
+            .FirstOrDefault(ni => ni.NumberID?.Value == numId);
+
+        if (numberingInstance?.AbstractNumId?.Val == null)
+            return;
+
+        // Find the abstract numbering definition
+        var abstractNumId = numberingInstance.AbstractNumId.Val.Value;
+        var abstractNum = numberingPart.Numbering
+            .Elements<AbstractNum>()
+            .FirstOrDefault(an => an.AbstractNumberId?.Value == abstractNumId);
+
+        if (abstractNum == null)
+            return;
+
+        // Find the level definition
+        var level = abstractNum.Elements<Level>()
+            .FirstOrDefault(l => l.LevelIndex?.Value == levelIndex);
+
+        if (level?.NumberingFormat?.Val == null)
+            return;
+
+        // Determine if numbered based on numbering format
+        var format = level.NumberingFormat.Val.Value;
+        segment.Metadata.IsNumberedList = IsNumberedFormat(format);
+
+        // Get start value if available
+        if (level.StartNumberingValue?.Val != null)
+        {
+            segment.Metadata.NumberingStartValue = level.StartNumberingValue.Val.Value;
+        }
+
+        // Extract LevelText format string
+        segment.Metadata.LevelTextFormat = level.LevelText?.Val?.Value;
     }
 
     private void DetectNumberingFormat(WordprocessingDocument wordDoc, Segment segment, NumberingProperties numPr)
@@ -504,6 +660,9 @@ public class DocxParser
         {
             segment.Metadata.NumberingStartValue = level.StartNumberingValue.Val.Value;
         }
+
+        // Extract LevelText format string for numbering prefix resolution
+        segment.Metadata.LevelTextFormat = level.LevelText?.Val?.Value;
     }
 
     private static bool IsNumberedFormat(NumberFormatValues format)
