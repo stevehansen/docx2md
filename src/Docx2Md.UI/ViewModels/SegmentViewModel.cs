@@ -146,4 +146,20 @@ public partial class SegmentViewModel : ViewModelBase
         OnPropertyChanged(nameof(MarkdownOutput));
         OnPropertyChanged(nameof(EffectiveMarkdown));
     }
+
+    /// <summary>
+    /// Refreshes all bindable properties from the underlying model.
+    /// Used when loading project files that apply overrides directly to the model.
+    /// </summary>
+    public void RefreshFromModel()
+    {
+        OnPropertyChanged(nameof(ExcludeFromOutput));
+        OnPropertyChanged(nameof(OverrideHeadingLevel));
+        OnPropertyChanged(nameof(OverrideType));
+        OnPropertyChanged(nameof(ManualMarkdownOverride));
+        OnPropertyChanged(nameof(HasManualOverride));
+        OnPropertyChanged(nameof(EffectiveType));
+        OnPropertyChanged(nameof(EffectiveMarkdown));
+        OnPropertyChanged(nameof(MarkdownOutput));
+    }
 }

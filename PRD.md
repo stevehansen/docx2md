@@ -326,6 +326,10 @@ Settings apply globally but may be overridden per segment.
   - Save/load segment overrides and settings
   - Content hash for detecting document changes
   - Preserves overrides across re-imports
+  - Full UI integration:
+    - File menu: Save Project (Ctrl+Shift+S), Open Project (Ctrl+Shift+O)
+    - Dirty indicator (*) in title bar for unsaved changes
+    - Title bar shows current document name
 
 ### Planned (Future)
 
@@ -343,7 +347,6 @@ Settings apply globally but may be overridden per segment.
 #### UI for New Features
 - Style mappings configuration dialog (currently JSON file only)
 - Front matter template editor
-- Project file management in UI (Save/Open Project menu items)
 
 ---
 
@@ -353,6 +356,6 @@ Settings apply globally but may be overridden per segment.
 |----------|----------|-----------|
 | DOCX preview strategy | Text approximation (v1), rich rendering (future) | Simpler implementation; visual rendering deferred |
 | Default Markdown flavor | GitHub-flavored Markdown (GFM) | GFM tables are widely supported; aligns with Git workflows |
-| Override persistence | Not persisted across re-imports (v1) | Future enhancement; requires session/project file format |
+| Override persistence | Project files (.docx2md) save overrides (v1.1) | Content hash enables safe re-import; overrides restored from project file |
 
 ---

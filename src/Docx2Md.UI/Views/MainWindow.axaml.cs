@@ -20,17 +20,21 @@ public partial class MainWindow : SukiWindow
         {
             viewModel.ShowOpenFileDialog = ShowOpenFileDialogAsync;
             viewModel.ShowSaveFileDialog = ShowSaveFileDialogAsync;
+            viewModel.ShowOpenProjectDialog = ShowOpenProjectDialogAsync;
+            viewModel.ShowSaveProjectDialog = ShowSaveProjectDialogAsync;
         }
     }
 
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-        
+
         if (DataContext is MainWindowViewModel viewModel)
         {
             viewModel.ShowOpenFileDialog = ShowOpenFileDialogAsync;
             viewModel.ShowSaveFileDialog = ShowSaveFileDialogAsync;
+            viewModel.ShowOpenProjectDialog = ShowOpenProjectDialogAsync;
+            viewModel.ShowSaveProjectDialog = ShowSaveProjectDialogAsync;
         }
     }
 
@@ -64,6 +68,43 @@ public partial class MainWindow : SukiWindow
                 new FilePickerFileType("Markdown Files")
                 {
                     Patterns = new[] { "*.md" }
+                }
+            }
+        });
+
+        return file?.Path.LocalPath;
+    }
+
+    private async Task<string?> ShowOpenProjectDialogAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open Project File",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("DOCX2MD Project Files")
+                {
+                    Patterns = new[] { "*.docx2md" }
+                }
+            }
+        });
+
+        return files.Count > 0 ? files[0].Path.LocalPath : null;
+    }
+
+    private async Task<string?> ShowSaveProjectDialogAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save Project",
+            DefaultExtension = "docx2md",
+            SuggestedFileName = "project.docx2md",
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType("DOCX2MD Project Files")
+                {
+                    Patterns = new[] { "*.docx2md" }
                 }
             }
         });

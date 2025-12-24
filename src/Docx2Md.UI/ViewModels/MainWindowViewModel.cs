@@ -12,6 +12,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Docx2Md.Core;
 using Docx2Md.Core.Models;
+using Docx2Md.Core.Services;
 using Docx2Md.UI.Models;
 using Docx2Md.UI.Services;
 
@@ -21,13 +22,17 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly Docx2MdConverter _converter;
     private readonly SettingsService _settingsService;
+    private readonly ProjectFileService _projectFileService;
     private readonly AppSettings _appSettings;
     private DocumentModel? _document;
     private string _currentFilePath = string.Empty;
+    private string _currentProjectPath = string.Empty;
 
     // Delegate for file dialogs (injected by View)
     public Func<Task<string?>>? ShowOpenFileDialog { get; set; }
     public Func<Task<string?>>? ShowSaveFileDialog { get; set; }
+    public Func<Task<string?>>? ShowOpenProjectDialog { get; set; }
+    public Func<Task<string?>>? ShowSaveProjectDialog { get; set; }
 
     /// <summary>
     /// Available heading levels for override ComboBox (null = use original)
@@ -102,12 +107,19 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private ObservableCollection<RecentFileItem> _recentFiles = new();
 
+    [ObservableProperty]
+    private bool _isDirty = false;
+
+    [ObservableProperty]
+    private string _windowTitle = "DOCX → Markdown Translation Workbench";
+
     private const int MaxRecentFiles = 10;
 
     public MainWindowViewModel()
     {
         // Load settings from disk
         _settingsService = new SettingsService();
+        _projectFileService = new ProjectFileService();
         _appSettings = _settingsService.Load();
 
         // Apply loaded settings to observable properties
@@ -264,6 +276,23 @@ public partial class MainWindowViewModel : ViewModelBase
             newValue.IsSelected = true;
     }
 
+    partial void OnIsDirtyChanged(bool value) => UpdateWindowTitle();
+
+    private void UpdateWindowTitle()
+    {
+        var title = "DOCX → Markdown Translation Workbench";
+        if (HasDocument)
+        {
+            var docName = Path.GetFileName(_currentFilePath);
+            title = $"{docName} - {title}";
+        }
+        if (IsDirty)
+        {
+            title = "* " + title;
+        }
+        WindowTitle = title;
+    }
+
     [RelayCommand]
     private void SelectSegment(SegmentViewModel? segment)
     {
@@ -275,6 +304,8 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         // Regenerate markdown when any segment override changes
         UpdateMarkdownOutput();
+        // Mark as dirty when overrides change
+        IsDirty = true;
     }
 
     [RelayCommand]
@@ -345,6 +376,106 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    private async Task SaveProjectAsync()
+    {
+        if (!HasDocument || _document == null)
+        {
+            StatusText = "No document loaded to save project.";
+            return;
+        }
+
+        try
+        {
+            if (ShowSaveProjectDialog == null)
+            {
+                StatusText = "Save project dialog not available.";
+                return;
+            }
+
+            var filePath = await ShowSaveProjectDialog();
+            if (!string.IsNullOrEmpty(filePath))
+            {
+                StatusText = "Saving project...";
+
+                // Create and save project file
+                var project = _projectFileService.CreateFromDocument(_document, Settings);
+                _projectFileService.Save(project, filePath);
+
+                _currentProjectPath = filePath;
+                IsDirty = false;
+
+                StatusText = $"Project saved to {Path.GetFileName(filePath)}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error saving project: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task OpenProjectAsync()
+    {
+        try
+        {
+            if (ShowOpenProjectDialog == null)
+            {
+                StatusText = "Open project dialog not available.";
+                return;
+            }
+
+            var filePath = await ShowOpenProjectDialog();
+            if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+            {
+                StatusText = $"Loading project {Path.GetFileName(filePath)}...";
+
+                var project = _projectFileService.Load(filePath);
+                if (project == null)
+                {
+                    StatusText = "Failed to load project file.";
+                    return;
+                }
+
+                // Load the source DOCX if available
+                if (!string.IsNullOrEmpty(project.SourceDocxPath) && File.Exists(project.SourceDocxPath))
+                {
+                    LoadDocument(project.SourceDocxPath);
+
+                    // Apply project overrides
+                    if (_document != null)
+                    {
+                        _projectFileService.ApplyToDocument(project, _document);
+
+                        // Refresh UI segments to reflect applied overrides
+                        foreach (var vm in Segments)
+                        {
+                            vm.RefreshFromModel();
+                        }
+
+                        // Regenerate markdown output
+                        UpdateMarkdownOutput();
+                    }
+
+                    _currentProjectPath = filePath;
+                    IsDirty = false;
+                    UpdateWindowTitle();
+
+                    var overrideCount = project.SegmentOverrides.Count;
+                    StatusText = $"Project loaded. {overrideCount} overrides applied.";
+                }
+                else
+                {
+                    StatusText = $"Source document not found: {project.SourceDocxPath}";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error loading project: {ex.Message}";
+        }
+    }
+
     private void LoadDocument(string filePath)
     {
         try
@@ -383,6 +514,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
             // Add to recent files
             AddToRecentFiles(filePath);
+
+            // Reset project state
+            _currentProjectPath = string.Empty;
+            IsDirty = false;
+            UpdateWindowTitle();
 
             var diagnosticCount = _document.GetAllDiagnostics().Count();
             StatusText = $"Loaded {Segments.Count} segments. {diagnosticCount} diagnostics.";

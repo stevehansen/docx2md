@@ -13,7 +13,7 @@
          x:Name="RootWindow"
          x:DataType="vm:MainWindowViewModel"
          Icon="/Assets/avalonia-logo.ico"
-         Title="DOCX → Markdown Translation Workbench"
+         Title="{Binding WindowTitle}"
          Width="1200" Height="700">
 
     <Design.DataContext>
@@ -24,6 +24,8 @@
     <suki:SukiWindow.KeyBindings>
         <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenFileCommand}" />
         <KeyBinding Gesture="Ctrl+E" Command="{Binding ExportMarkdownCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+O" Command="{Binding OpenProjectCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding SaveProjectCommand}" />
         <KeyBinding Gesture="F5" Command="{Binding ToggleDocxPreviewCommand}" />
         <KeyBinding Gesture="F6" Command="{Binding ToggleSegmentInspectorCommand}" />
         <KeyBinding Gesture="F7" Command="{Binding ToggleMarkdownPreviewCommand}" />
@@ -35,6 +37,9 @@
             <MenuItem Header="File">
                 <MenuItem Header="Open DOCX..." Command="{Binding OpenFileCommand}" InputGesture="Ctrl+O" />
                 <MenuItem Header="Export Markdown..." Command="{Binding ExportMarkdownCommand}" InputGesture="Ctrl+E" IsEnabled="{Binding HasDocument}" />
+                <Separator />
+                <MenuItem Header="Open Project..." Command="{Binding OpenProjectCommand}" InputGesture="Ctrl+Shift+O" />
+                <MenuItem Header="Save Project..." Command="{Binding SaveProjectCommand}" InputGesture="Ctrl+Shift+S" IsEnabled="{Binding HasDocument}" />
                 <Separator />
                 <MenuItem Header="Recent Files" ItemsSource="{Binding RecentFiles}" IsEnabled="{Binding RecentFiles.Count}">
                     <MenuItem.ItemContainerTheme>
