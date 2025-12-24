@@ -331,6 +331,14 @@ Settings apply globally but may be overridden per segment.
     - Dirty indicator (*) in title bar for unsaved changes
     - Title bar shows current document name
 
+### Implemented (v1.2 - UI Polish & List Numbering)
+- Segment overrides panel compact layout (segment list takes more vertical space)
+- Auto-scroll to selected segment in DOCX and Markdown preview panes
+- Click-to-select segments in rendered Markdown preview
+- Project file save dialog defaults to source DOCX filename with .docx2md extension
+- Preserve original numbered list numbering from DOCX (uses actual sequence numbers)
+- Recent files list includes both DOCX documents and project files (.docx2md)
+
 ### Planned (Future)
 
 #### UI & Productivity
@@ -343,6 +351,9 @@ Settings apply globally but may be overridden per segment.
 - Undo/redo for override changes
 - Document statistics panel (word count, segment breakdown, diagnostic summary)
 - Diff view (side-by-side comparison of original text vs Markdown output)
+
+#### Known Limitations
+- Nested list visual rendering in Markdown preview is approximate (each segment renders independently, losing nesting context; markdown output is correct)
 
 #### UI for New Features
 - Style mappings configuration dialog (currently JSON file only)

@@ -213,8 +213,9 @@ public class MarkdownConverter
 
         if (segment.Metadata.IsNumberedList)
         {
-            // Numbered list - use "1." format (Markdown auto-numbers)
-            return $"{indent}1. {content}";
+            // Numbered list - use actual item number from parsing
+            var number = segment.Metadata.ListItemNumber ?? 1;
+            return $"{indent}{number}. {content}";
         }
         else
         {

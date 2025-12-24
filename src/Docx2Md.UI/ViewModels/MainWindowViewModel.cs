@@ -32,7 +32,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public Func<Task<string?>>? ShowOpenFileDialog { get; set; }
     public Func<Task<string?>>? ShowSaveFileDialog { get; set; }
     public Func<Task<string?>>? ShowOpenProjectDialog { get; set; }
-    public Func<Task<string?>>? ShowSaveProjectDialog { get; set; }
+    public Func<string?, Task<string?>>? ShowSaveProjectDialog { get; set; }
 
     /// <summary>
     /// Available heading levels for override ComboBox (null = use original)
@@ -172,7 +172,7 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void OpenRecentFile(RecentFileItem? item)
+    private async Task OpenRecentFileAsync(RecentFileItem? item)
     {
         if (item == null) return;
 
@@ -186,7 +186,15 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        LoadDocument(item.FilePath);
+        // Check if it's a project file or a DOCX file
+        if (item.FilePath.EndsWith(".docx2md", StringComparison.OrdinalIgnoreCase))
+        {
+            await OpenProjectFromPathAsync(item.FilePath);
+        }
+        else
+        {
+            LoadDocument(item.FilePath);
+        }
     }
 
     // View toggle commands
@@ -393,7 +401,15 @@ public partial class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            var filePath = await ShowSaveProjectDialog();
+            // Generate suggested filename from source DOCX
+            string? suggestedFileName = null;
+            if (!string.IsNullOrEmpty(_currentFilePath))
+            {
+                var docxName = Path.GetFileNameWithoutExtension(_currentFilePath);
+                suggestedFileName = $"{docxName}.docx2md";
+            }
+
+            var filePath = await ShowSaveProjectDialog(suggestedFileName);
             if (!string.IsNullOrEmpty(filePath))
             {
                 StatusText = "Saving project...";
@@ -404,6 +420,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
                 _currentProjectPath = filePath;
                 IsDirty = false;
+
+                // Add project to recent files
+                AddToRecentFiles(filePath);
 
                 StatusText = $"Project saved to {Path.GetFileName(filePath)}";
             }
@@ -428,46 +447,61 @@ public partial class MainWindowViewModel : ViewModelBase
             var filePath = await ShowOpenProjectDialog();
             if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
             {
-                StatusText = $"Loading project {Path.GetFileName(filePath)}...";
+                await OpenProjectFromPathAsync(filePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error loading project: {ex.Message}";
+        }
+    }
 
-                var project = _projectFileService.Load(filePath);
-                if (project == null)
+    private async Task OpenProjectFromPathAsync(string filePath)
+    {
+        try
+        {
+            StatusText = $"Loading project {Path.GetFileName(filePath)}...";
+
+            var project = _projectFileService.Load(filePath);
+            if (project == null)
+            {
+                StatusText = "Failed to load project file.";
+                return;
+            }
+
+            // Load the source DOCX if available
+            if (!string.IsNullOrEmpty(project.SourceDocxPath) && File.Exists(project.SourceDocxPath))
+            {
+                LoadDocument(project.SourceDocxPath);
+
+                // Apply project overrides
+                if (_document != null)
                 {
-                    StatusText = "Failed to load project file.";
-                    return;
-                }
+                    _projectFileService.ApplyToDocument(project, _document);
 
-                // Load the source DOCX if available
-                if (!string.IsNullOrEmpty(project.SourceDocxPath) && File.Exists(project.SourceDocxPath))
-                {
-                    LoadDocument(project.SourceDocxPath);
-
-                    // Apply project overrides
-                    if (_document != null)
+                    // Refresh UI segments to reflect applied overrides
+                    foreach (var vm in Segments)
                     {
-                        _projectFileService.ApplyToDocument(project, _document);
-
-                        // Refresh UI segments to reflect applied overrides
-                        foreach (var vm in Segments)
-                        {
-                            vm.RefreshFromModel();
-                        }
-
-                        // Regenerate markdown output
-                        UpdateMarkdownOutput();
+                        vm.RefreshFromModel();
                     }
 
-                    _currentProjectPath = filePath;
-                    IsDirty = false;
-                    UpdateWindowTitle();
+                    // Regenerate markdown output
+                    UpdateMarkdownOutput();
+                }
 
-                    var overrideCount = project.SegmentOverrides.Count;
-                    StatusText = $"Project loaded. {overrideCount} overrides applied.";
-                }
-                else
-                {
-                    StatusText = $"Source document not found: {project.SourceDocxPath}";
-                }
+                _currentProjectPath = filePath;
+                IsDirty = false;
+                UpdateWindowTitle();
+
+                // Add project to recent files
+                AddToRecentFiles(filePath);
+
+                var overrideCount = project.SegmentOverrides.Count;
+                StatusText = $"Project loaded. {overrideCount} overrides applied.";
+            }
+            else
+            {
+                StatusText = $"Source document not found: {project.SourceDocxPath}";
             }
         }
         catch (Exception ex)

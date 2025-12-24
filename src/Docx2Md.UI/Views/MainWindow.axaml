@@ -129,11 +129,11 @@
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="DOCX Preview" FontWeight="Bold"
                                Padding="5" Background="{DynamicResource SukiCardBackground}" />
-                    <ScrollViewer>
+                    <ScrollViewer x:Name="DocxPreviewScrollViewer">
                         <StackPanel Margin="10">
                             <TextBlock Text="{Binding DocumentTitle}" FontSize="18" FontWeight="Bold" Margin="0,0,0,10" />
                             <!-- Segmented preview with click-to-select and highlight -->
-                            <ItemsControl ItemsSource="{Binding Segments}">
+                            <ItemsControl x:Name="DocxPreviewItemsControl" ItemsSource="{Binding Segments}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:SegmentViewModel">
                                         <Border Background="{Binding IsSelected, Converter={x:Static conv:BoolToHighlightBrushConverter.Instance}}"
@@ -167,27 +167,7 @@
                     <TextBlock DockPanel.Dock="Top" Text="Segment Inspector" FontWeight="Bold"
                                Padding="5" Background="{DynamicResource SukiCardBackground}" />
 
-                    <!-- Segment List (simplified) -->
-                    <DataGrid DockPanel.Dock="Top"
-                              ItemsSource="{Binding Segments}"
-                              SelectedItem="{Binding SelectedSegment}"
-                              AutoGenerateColumns="False"
-                              IsReadOnly="True"
-                              GridLinesVisibility="All"
-                              CanUserReorderColumns="True"
-                              CanUserResizeColumns="True"
-                              MinHeight="150"
-                              MaxHeight="300">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="#" Binding="{Binding OrderIndex}" Width="40" />
-                            <DataGridTextColumn Header="Type" Binding="{Binding EffectiveType}" Width="80" />
-                            <DataGridTextColumn Header="Style" Binding="{Binding Metadata.StyleName}" Width="100" />
-                            <DataGridTextColumn Header="Content" Binding="{Binding Content}" Width="*" />
-                            <DataGridTextColumn Header="Diag" Binding="{Binding DiagnosticCount}" Width="45" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-
-                    <!-- Detail Panel (shown when segment selected) -->
+                    <!-- Detail Panel (shown when segment selected) - docked to bottom FIRST so DataGrid fills remaining -->
                     <Border DockPanel.Dock="Bottom"
                             IsVisible="{Binding SelectedSegment, Converter={x:Static ObjectConverters.IsNotNull}}"
                             Background="{DynamicResource SukiCardBackground}"
@@ -195,7 +175,7 @@
                             BorderThickness="0,1,0,0"
                             Padding="10"
                             Margin="0,5,0,0">
-                        <StackPanel Spacing="10">
+                        <StackPanel Spacing="8">
                             <TextBlock Text="Segment Overrides" FontWeight="SemiBold" />
 
                             <!-- Row 1: Exclude, Heading Level, Type Override -->
@@ -231,30 +211,32 @@
                                 </ComboBox>
                             </Grid>
 
-                            <!-- Row 2: Manual Markdown Override -->
+                            <!-- Row 2: Manual Markdown Override (compact) -->
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Text="Manual Markdown Override:" Margin="0,0,0,5" />
+                                <TextBlock DockPanel.Dock="Top" Text="Manual Markdown Override:" Margin="0,0,0,3" />
                                 <TextBox Text="{Binding SelectedSegment.ManualMarkdownOverride}"
                                          Watermark="Leave empty to use converted markdown"
                                          AcceptsReturn="True"
                                          TextWrapping="Wrap"
-                                         MinHeight="60"
-                                         MaxHeight="120" />
+                                         Height="50" />
                             </DockPanel>
 
-                            <!-- Row 3: Preview of effective markdown -->
+                            <!-- Row 3: Preview of effective markdown (compact) -->
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Text="Effective Markdown:" Margin="0,0,0,5"
+                                <TextBlock DockPanel.Dock="Top" Text="Effective Markdown:" Margin="0,0,0,3"
                                            Foreground="{DynamicResource SukiLowText}" />
                                 <Border Background="{DynamicResource SukiBackground}"
                                         BorderBrush="{DynamicResource SukiBorderBrush}"
                                         BorderThickness="1"
-                                        Padding="8"
-                                        CornerRadius="4">
-                                    <TextBlock Text="{Binding SelectedSegment.EffectiveMarkdown}"
-                                               FontFamily="Consolas,Courier New,monospace"
-                                               TextWrapping="Wrap"
-                                               Foreground="{DynamicResource SukiText}" />
+                                        Padding="6"
+                                        CornerRadius="4"
+                                        MaxHeight="60">
+                                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                        <TextBlock Text="{Binding SelectedSegment.EffectiveMarkdown}"
+                                                   FontFamily="Consolas,Courier New,monospace"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource SukiText}" />
+                                    </ScrollViewer>
                                 </Border>
                             </DockPanel>
                         </StackPanel>
@@ -263,11 +245,29 @@
                     <!-- Placeholder when no segment selected -->
                     <Border DockPanel.Dock="Bottom"
                             IsVisible="{Binding SelectedSegment, Converter={x:Static ObjectConverters.IsNull}}"
-                            Padding="20">
+                            Padding="10">
                         <TextBlock Text="Select a segment to view and edit overrides"
                                    HorizontalAlignment="Center"
                                    Foreground="{DynamicResource SukiLowText}" />
                     </Border>
+
+                    <!-- Segment List (fills remaining space after header and bottom panel) -->
+                    <DataGrid x:Name="SegmentDataGrid"
+                              ItemsSource="{Binding Segments}"
+                              SelectedItem="{Binding SelectedSegment}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              GridLinesVisibility="All"
+                              CanUserReorderColumns="True"
+                              CanUserResizeColumns="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="#" Binding="{Binding OrderIndex}" Width="40" />
+                            <DataGridTextColumn Header="Type" Binding="{Binding EffectiveType}" Width="80" />
+                            <DataGridTextColumn Header="Style" Binding="{Binding Metadata.StyleName}" Width="100" />
+                            <DataGridTextColumn Header="Content" Binding="{Binding Content}" Width="*" />
+                            <DataGridTextColumn Header="Diag" Binding="{Binding DiagnosticCount}" Width="45" />
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </DockPanel>
             </Border>
 
@@ -289,10 +289,10 @@
                         <ToggleButton Grid.Column="1" Content="Raw" IsChecked="{Binding ShowRawMarkdown}"
                                       Margin="5" Padding="8,4" />
                     </Grid>
-                    <ScrollViewer>
+                    <ScrollViewer x:Name="MarkdownPreviewScrollViewer">
                         <StackPanel Margin="10">
                             <!-- Rendered Markdown with segment highlighting -->
-                            <ItemsControl ItemsSource="{Binding Segments}" IsVisible="{Binding !ShowRawMarkdown}">
+                            <ItemsControl x:Name="RenderedMarkdownItemsControl" ItemsSource="{Binding Segments}" IsVisible="{Binding !ShowRawMarkdown}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:SegmentViewModel">
                                         <Border Background="{Binding IsSelected, Converter={x:Static conv:BoolToHighlightBrushConverter.Instance}}"
@@ -300,7 +300,7 @@
                                                 Cursor="Hand"
                                                 PointerPressed="OnMarkdownSegmentClick"
                                                 IsVisible="{Binding !ExcludeFromOutput}">
-                                            <md:MarkdownScrollViewer Markdown="{Binding EffectiveMarkdown}">
+                                            <md:MarkdownScrollViewer Markdown="{Binding EffectiveMarkdown}" IsHitTestVisible="False">
                                                 <md:MarkdownScrollViewer.Styles>
                                                     <Style Selector="ctxt|CTextBlock.Heading1">
                                                         <Setter Property="Foreground" Value="{DynamicResource SukiText}" />
@@ -362,7 +362,7 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                             <!-- Raw Markdown with segment highlighting -->
-                            <ItemsControl ItemsSource="{Binding Segments}" IsVisible="{Binding ShowRawMarkdown}">
+                            <ItemsControl x:Name="RawMarkdownItemsControl" ItemsSource="{Binding Segments}" IsVisible="{Binding ShowRawMarkdown}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:SegmentViewModel">
                                         <Border Background="{Binding IsSelected, Converter={x:Static conv:BoolToHighlightBrushConverter.Instance}}"

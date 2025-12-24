@@ -1,9 +1,13 @@
 using System;
+using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using Docx2Md.UI.ViewModels;
 using SukiUI.Controls;
 
@@ -11,17 +15,16 @@ namespace Docx2Md.UI.Views;
 
 public partial class MainWindow : SukiWindow
 {
+    private MainWindowViewModel? _viewModel;
+
     public MainWindow()
     {
         InitializeComponent();
-        
+
         // Wire up file dialog support
         if (DataContext is MainWindowViewModel viewModel)
         {
-            viewModel.ShowOpenFileDialog = ShowOpenFileDialogAsync;
-            viewModel.ShowSaveFileDialog = ShowSaveFileDialogAsync;
-            viewModel.ShowOpenProjectDialog = ShowOpenProjectDialogAsync;
-            viewModel.ShowSaveProjectDialog = ShowSaveProjectDialogAsync;
+            SetupViewModel(viewModel);
         }
     }
 
@@ -29,12 +32,69 @@ public partial class MainWindow : SukiWindow
     {
         base.OnDataContextChanged(e);
 
+        // Unsubscribe from old view model
+        if (_viewModel != null)
+        {
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        }
+
         if (DataContext is MainWindowViewModel viewModel)
         {
-            viewModel.ShowOpenFileDialog = ShowOpenFileDialogAsync;
-            viewModel.ShowSaveFileDialog = ShowSaveFileDialogAsync;
-            viewModel.ShowOpenProjectDialog = ShowOpenProjectDialogAsync;
-            viewModel.ShowSaveProjectDialog = ShowSaveProjectDialogAsync;
+            SetupViewModel(viewModel);
+        }
+    }
+
+    private void SetupViewModel(MainWindowViewModel viewModel)
+    {
+        _viewModel = viewModel;
+        viewModel.ShowOpenFileDialog = ShowOpenFileDialogAsync;
+        viewModel.ShowSaveFileDialog = ShowSaveFileDialogAsync;
+        viewModel.ShowOpenProjectDialog = ShowOpenProjectDialogAsync;
+        viewModel.ShowSaveProjectDialog = (suggestedFileName) => ShowSaveProjectDialogAsync(suggestedFileName);
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.SelectedSegment))
+        {
+            ScrollToSelectedSegment();
+        }
+    }
+
+    private void ScrollToSelectedSegment()
+    {
+        if (_viewModel?.SelectedSegment == null)
+            return;
+
+        var selectedIndex = _viewModel.Segments.IndexOf(_viewModel.SelectedSegment);
+        if (selectedIndex < 0)
+            return;
+
+        // Scroll DOCX preview
+        ScrollItemsControlToIndex(DocxPreviewItemsControl, selectedIndex);
+
+        // Scroll Markdown preview (use the visible one)
+        if (_viewModel.ShowRawMarkdown)
+        {
+            ScrollItemsControlToIndex(RawMarkdownItemsControl, selectedIndex);
+        }
+        else
+        {
+            ScrollItemsControlToIndex(RenderedMarkdownItemsControl, selectedIndex);
+        }
+    }
+
+    private void ScrollItemsControlToIndex(ItemsControl? itemsControl, int index)
+    {
+        if (itemsControl == null)
+            return;
+
+        // Get the container at the index
+        var container = itemsControl.ContainerFromIndex(index);
+        if (container is Control control)
+        {
+            control.BringIntoView();
         }
     }
 
@@ -93,13 +153,13 @@ public partial class MainWindow : SukiWindow
         return files.Count > 0 ? files[0].Path.LocalPath : null;
     }
 
-    private async Task<string?> ShowSaveProjectDialogAsync()
+    private async Task<string?> ShowSaveProjectDialogAsync(string? suggestedFileName = null)
     {
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Save Project",
             DefaultExtension = "docx2md",
-            SuggestedFileName = "project.docx2md",
+            SuggestedFileName = suggestedFileName ?? "project.docx2md",
             FileTypeChoices = new[]
             {
                 new FilePickerFileType("DOCX2MD Project Files")

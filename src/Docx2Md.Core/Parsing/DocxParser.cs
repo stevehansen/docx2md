@@ -67,7 +67,66 @@ public class DocxParser
             DetectUnsupportedFeatures(wordDoc, document);
         }
 
+        // Calculate list item numbers after all segments are parsed
+        CalculateListItemNumbers(document);
+
         return document;
+    }
+
+    /// <summary>
+    /// Calculate sequential list item numbers for numbered lists
+    /// </summary>
+    private void CalculateListItemNumbers(DocumentModel document)
+    {
+        // Track counters per (numId, level) combination
+        var listCounters = new Dictionary<(string numId, int level), int>();
+        string? previousNumId = null;
+        int previousLevel = -1;
+
+        foreach (var segment in document.Segments)
+        {
+            if (segment.Type != SegmentType.ListItem ||
+                !segment.Metadata.IsNumberedList ||
+                string.IsNullOrEmpty(segment.Metadata.NumberingId))
+            {
+                // Reset when we exit a list
+                if (segment.Type != SegmentType.ListItem)
+                {
+                    previousNumId = null;
+                    previousLevel = -1;
+                }
+                continue;
+            }
+
+            var numId = segment.Metadata.NumberingId;
+            var level = segment.Metadata.NumberingLevel ?? 0;
+            var key = (numId, level);
+
+            // Check if this is a new list or continuing an existing one
+            bool isNewList = numId != previousNumId;
+            bool isLevelChange = level != previousLevel;
+
+            if (isNewList || !listCounters.ContainsKey(key))
+            {
+                // Start new counter at this level with start value (default 1)
+                var startValue = segment.Metadata.NumberingStartValue ?? 1;
+                listCounters[key] = startValue;
+            }
+            else if (isLevelChange && level < previousLevel)
+            {
+                // Returning to a parent level - don't reset, continue numbering
+            }
+            else if (!isLevelChange)
+            {
+                // Same level, same list - increment
+                listCounters[key]++;
+            }
+
+            segment.Metadata.ListItemNumber = listCounters[key];
+
+            previousNumId = numId;
+            previousLevel = level;
+        }
     }
 
     private void ExtractDocumentMetadata(WordprocessingDocument wordDoc, DocumentModel document)

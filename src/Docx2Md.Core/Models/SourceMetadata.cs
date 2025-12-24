@@ -11,6 +11,10 @@ public class SourceMetadata
     public int? NumberingLevel { get; set; }
     public bool IsNumberedList { get; set; }
     public int? NumberingStartValue { get; set; }
+    /// <summary>
+    /// The actual sequence number for this list item (computed during parsing)
+    /// </summary>
+    public int? ListItemNumber { get; set; }
     public bool IsBold { get; set; }
     public bool IsItalic { get; set; }
     public bool IsUnderline { get; set; }
