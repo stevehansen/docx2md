@@ -49,8 +49,13 @@ public class MarkdownExporter
     {
         var sb = new StringBuilder();
 
-        // Add title if available
-        if (!string.IsNullOrEmpty(document.Title))
+        // Add front matter if template is configured
+        if (_settings.FrontMatterTemplate != null)
+        {
+            AppendFrontMatter(document, sb, _settings.FrontMatterTemplate);
+        }
+        // Otherwise add title if available (when no front matter)
+        else if (!string.IsNullOrEmpty(document.Title))
         {
             sb.AppendLine($"# {document.Title}");
             sb.AppendLine();
@@ -70,6 +75,12 @@ public class MarkdownExporter
             }
         }
 
+        // Add footnote/endnote definitions if any
+        if (_settings.EnableFootnoteConversion)
+        {
+            AppendFootnoteDefinitions(document, sb);
+        }
+
         // Add Lost & Found section if enabled
         if (_settings.AppendLostAndFoundSection)
         {
@@ -77,6 +88,106 @@ public class MarkdownExporter
         }
 
         return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Append front matter to the document
+    /// </summary>
+    private void AppendFrontMatter(DocumentModel document, StringBuilder sb, FrontMatterTemplate template)
+    {
+        var delimiter = template.Format == FrontMatterFormat.Yaml ? "---" : "+++";
+
+        sb.AppendLine(delimiter);
+
+        foreach (var field in template.Fields)
+        {
+            var value = ResolveFieldValue(document, field);
+            if (template.Format == FrontMatterFormat.Yaml)
+            {
+                sb.AppendLine($"{field.Key}: {FormatYamlValue(value)}");
+            }
+            else
+            {
+                sb.AppendLine($"{field.Key} = {FormatTomlValue(value)}");
+            }
+        }
+
+        sb.AppendLine(delimiter);
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Resolve a front matter field value from document metadata
+    /// </summary>
+    private string ResolveFieldValue(DocumentModel document, FrontMatterField field)
+    {
+        var value = field.Source switch
+        {
+            FrontMatterSource.DocumentTitle => document.Title,
+            FrontMatterSource.DocumentAuthor => document.Metadata.TryGetValue("Creator", out var author)
+                ? author?.ToString() : null,
+            FrontMatterSource.DateCreated => document.Metadata.TryGetValue("Created", out var created)
+                ? FormatDate(created) : null,
+            FrontMatterSource.DateModified => document.Metadata.TryGetValue("Modified", out var modified)
+                ? FormatDate(modified) : null,
+            FrontMatterSource.CurrentDate => DateTime.Now.ToString("yyyy-MM-dd"),
+            FrontMatterSource.FileName => Path.GetFileNameWithoutExtension(document.SourcePath),
+            FrontMatterSource.Custom => field.CustomValue,
+            _ => null
+        };
+
+        return value ?? field.DefaultValue ?? "";
+    }
+
+    private static string FormatDate(object? dateObj)
+    {
+        if (dateObj is DateTime dt && dt != DateTime.MinValue)
+        {
+            return dt.ToString("yyyy-MM-dd");
+        }
+        return "";
+    }
+
+    private static string FormatYamlValue(string value)
+    {
+        // Quote strings that contain special characters
+        if (value.Contains(':') || value.Contains('#') || value.Contains('\n') ||
+            value.StartsWith(' ') || value.EndsWith(' ') ||
+            value.StartsWith('"') || value.StartsWith('\''))
+        {
+            return $"\"{value.Replace("\"", "\\\"")}\"";
+        }
+        return value;
+    }
+
+    private static string FormatTomlValue(string value)
+    {
+        // TOML strings are always quoted
+        return $"\"{value.Replace("\"", "\\\"")}\"";
+    }
+
+    /// <summary>
+    /// Append footnote and endnote definitions at the end of the document
+    /// </summary>
+    private void AppendFootnoteDefinitions(DocumentModel document, StringBuilder sb)
+    {
+        // Combine footnotes and endnotes, sorted by ID
+        var allNotes = document.Footnotes
+            .Concat(document.Endnotes)
+            .OrderBy(n => n.IsEndnote)  // Footnotes first, then endnotes
+            .ThenBy(n => n.Id)
+            .ToList();
+
+        if (allNotes.Count == 0)
+            return;
+
+        sb.AppendLine();
+
+        foreach (var note in allNotes)
+        {
+            // Format: [^1]: Definition text
+            sb.AppendLine($"[^{note.Id}]: {note.Content}");
+        }
     }
 
     private void AppendLostAndFound(DocumentModel document, StringBuilder sb)

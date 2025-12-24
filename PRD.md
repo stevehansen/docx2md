@@ -297,6 +297,36 @@ Settings apply globally but may be overridden per segment.
   - Handles missing files gracefully
   - Most recently opened appears first
 
+### Implemented (v1.1 - Conversion Quality & Workflow)
+- Hyperlink preservation:
+  - Extracts Word hyperlinks with relationship ID resolution
+  - Converts to Markdown `[text](url)` format
+  - Supports internal bookmark links (`#anchor`)
+- Inline formatting preservation:
+  - Bold (`**text**`), italic (`*text*`), strikethrough (`~~text~~`)
+  - Per-run formatting tracking (not just paragraph-level)
+- Code block detection:
+  - Detects monospace fonts (Courier New, Consolas, etc.)
+  - Inline code wrapped in backticks
+  - Full monospace paragraphs converted to fenced code blocks
+  - Configurable monospace font list
+- Footnote/endnote conversion:
+  - Extracts footnote/endnote definitions from DOCX
+  - Converts references to `[^1]` format
+  - Appends definitions at end of document
+- Custom style mappings:
+  - JSON config file at %APPDATA%/docx2md/style-mappings.json
+  - Map Word styles to: Heading, CodeBlock, Blockquote, Exclude
+  - Custom prefix/suffix support
+- Front matter templates:
+  - Built-in Hugo and Jekyll templates
+  - YAML and TOML format support
+  - Dynamic field values from document metadata
+- Project files (.docx2md):
+  - Save/load segment overrides and settings
+  - Content hash for detecting document changes
+  - Preserves overrides across re-imports
+
 ### Planned (Future)
 
 #### UI & Productivity
@@ -310,15 +340,10 @@ Settings apply globally but may be overridden per segment.
 - Document statistics panel (word count, segment breakdown, diagnostic summary)
 - Diff view (side-by-side comparison of original text vs Markdown output)
 
-#### Conversion Quality
-- Code block detection (monospace/Courier New text → fenced code blocks)
-- Custom style mappings (user-defined Word style → Markdown output rules)
-- Footnote/endnote conversion to Markdown footnotes `[^1]`
-- Hyperlink preservation (Word hyperlinks → `[text](url)`)
-
-#### Workflow Integration
-- Front matter templates (YAML/TOML for static site generators like Hugo, Jekyll, Docusaurus)
-- Project files (save overrides and settings per document for re-processing)
+#### UI for New Features
+- Style mappings configuration dialog (currently JSON file only)
+- Front matter template editor
+- Project file management in UI (Save/Open Project menu items)
 
 ---
 

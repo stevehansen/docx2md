@@ -26,6 +26,16 @@ public class DocumentModel
     public List<ImageInfo> Images { get; set; } = new();
 
     /// <summary>
+    /// Footnote definitions extracted from the document
+    /// </summary>
+    public List<FootnoteDefinition> Footnotes { get; set; } = new();
+
+    /// <summary>
+    /// Endnote definitions extracted from the document
+    /// </summary>
+    public List<FootnoteDefinition> Endnotes { get; set; } = new();
+
+    /// <summary>
     /// Document-level diagnostics
     /// </summary>
     public List<Diagnostic> DocumentDiagnostics { get; set; } = new();

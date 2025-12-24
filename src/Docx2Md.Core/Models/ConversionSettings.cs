@@ -56,6 +56,51 @@ public class ConversionSettings
     public bool PreserveLineBreaks { get; set; } = true;
 
     /// <summary>
+    /// Enable hyperlink conversion to Markdown links
+    /// </summary>
+    public bool EnableHyperlinkConversion { get; set; } = true;
+
+    /// <summary>
+    /// Enable code block detection from monospace fonts
+    /// </summary>
+    public bool EnableCodeBlockDetection { get; set; } = true;
+
+    /// <summary>
+    /// Enable footnote/endnote conversion
+    /// </summary>
+    public bool EnableFootnoteConversion { get; set; } = true;
+
+    /// <summary>
+    /// Font families to detect as code (monospace fonts)
+    /// </summary>
+    public List<string> MonospaceFonts { get; set; } = new()
+    {
+        "Courier New",
+        "Consolas",
+        "Lucida Console",
+        "Monaco",
+        "Source Code Pro",
+        "Fira Code",
+        "Courier",
+        "Menlo"
+    };
+
+    /// <summary>
+    /// Default language hint for detected code blocks (empty for no language)
+    /// </summary>
+    public string CodeBlockLanguage { get; set; } = "";
+
+    /// <summary>
+    /// Custom style mappings (Word style name to Markdown conversion action)
+    /// </summary>
+    public List<StyleMapping> StyleMappings { get; set; } = new();
+
+    /// <summary>
+    /// Front matter template to use (null for no front matter)
+    /// </summary>
+    public FrontMatterTemplate? FrontMatterTemplate { get; set; }
+
+    /// <summary>
     /// Create default settings
     /// </summary>
     public static ConversionSettings Default => new ConversionSettings();

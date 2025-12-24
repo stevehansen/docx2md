@@ -45,4 +45,24 @@ public static class DiagnosticCodes
     // Quality checks
     public const string HEADING_HIERARCHY_INVALID = "HEADING_HIERARCHY_INVALID";
     public const string EXCESSIVE_STYLE_AMBIGUITY = "EXCESSIVE_STYLE_AMBIGUITY";
+
+    // Hyperlinks
+    public const string HYPERLINK_CONVERTED = "HYPERLINK_CONVERTED";
+    public const string HYPERLINK_INVALID_URL = "HYPERLINK_INVALID_URL";
+    public const string HYPERLINK_INTERNAL_BOOKMARK = "HYPERLINK_INTERNAL_BOOKMARK";
+
+    // Code blocks
+    public const string CODE_BLOCK_DETECTED = "CODE_BLOCK_DETECTED";
+    public const string CODE_INLINE_DETECTED = "CODE_INLINE_DETECTED";
+
+    // Footnotes/Endnotes (when converted)
+    public const string FOOTNOTE_CONVERTED = "FOOTNOTE_CONVERTED";
+    public const string ENDNOTE_CONVERTED = "ENDNOTE_CONVERTED";
+
+    // Style mappings
+    public const string STYLE_MAPPING_APPLIED = "STYLE_MAPPING_APPLIED";
+
+    // Project files
+    public const string PROJECT_OVERRIDE_APPLIED = "PROJECT_OVERRIDE_APPLIED";
+    public const string PROJECT_SEGMENT_MISMATCH = "PROJECT_SEGMENT_MISMATCH";
 }

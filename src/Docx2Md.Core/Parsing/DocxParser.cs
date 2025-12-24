@@ -107,8 +107,10 @@ public class DocxParser
         var styleId = paragraph.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
         segment.Metadata.StyleName = styleId;
 
-        // Extract text content
-        segment.Content = GetParagraphText(paragraph);
+        // Extract text content and inline elements
+        var (text, inlineElements) = ExtractParagraphContent(paragraph, wordDoc);
+        segment.Content = text;
+        segment.InlineElements = inlineElements;
 
         // Detect segment type based on style
         segment.Type = DetectSegmentType(paragraph, styleId);
@@ -122,10 +124,168 @@ public class DocxParser
         return segment;
     }
 
-    private string GetParagraphText(Paragraph paragraph)
+    /// <summary>
+    /// Extracts paragraph content including inline elements (hyperlinks, formatting, footnotes)
+    /// </summary>
+    private (string text, List<InlineElement> inlineElements) ExtractParagraphContent(
+        Paragraph paragraph,
+        WordprocessingDocument wordDoc)
     {
-        var texts = paragraph.Descendants<Text>();
-        return string.Join("", texts.Select(t => t.Text));
+        var textBuilder = new System.Text.StringBuilder();
+        var elements = new List<InlineElement>();
+        int currentOffset = 0;
+
+        foreach (var child in paragraph.ChildElements)
+        {
+            if (child is Run run)
+            {
+                var (runText, runElements) = ProcessRun(run, currentOffset, wordDoc);
+                textBuilder.Append(runText);
+                elements.AddRange(runElements);
+                currentOffset += runText.Length;
+            }
+            else if (child is Hyperlink hyperlink)
+            {
+                var (linkText, linkElement) = ProcessHyperlink(hyperlink, wordDoc, currentOffset);
+                textBuilder.Append(linkText);
+                if (linkElement != null)
+                    elements.Add(linkElement);
+                currentOffset += linkText.Length;
+            }
+        }
+
+        return (textBuilder.ToString(), elements);
+    }
+
+    /// <summary>
+    /// Process a Run element to extract text and formatting
+    /// </summary>
+    private (string text, List<InlineElement> elements) ProcessRun(Run run, int startOffset, WordprocessingDocument wordDoc)
+    {
+        var elements = new List<InlineElement>();
+
+        // Check for footnote/endnote references first
+        var footnoteRef = run.GetFirstChild<FootnoteReference>();
+        if (footnoteRef != null && _settings.EnableFootnoteConversion)
+        {
+            elements.Add(new FootnoteReferenceElement
+            {
+                StartOffset = startOffset,
+                EndOffset = startOffset,
+                Text = "",
+                NoteId = (int)(footnoteRef.Id?.Value ?? 0),
+                IsEndnote = false
+            });
+            // Footnote references don't contribute to text
+            return ("", elements);
+        }
+
+        var endnoteRef = run.GetFirstChild<EndnoteReference>();
+        if (endnoteRef != null && _settings.EnableFootnoteConversion)
+        {
+            elements.Add(new FootnoteReferenceElement
+            {
+                StartOffset = startOffset,
+                EndOffset = startOffset,
+                Text = "",
+                NoteId = (int)(endnoteRef.Id?.Value ?? 0),
+                IsEndnote = true
+            });
+            return ("", elements);
+        }
+
+        // Extract text from run
+        var text = string.Join("", run.Descendants<Text>().Select(t => t.Text));
+        if (string.IsNullOrEmpty(text))
+            return (text, elements);
+
+        // Extract formatting
+        var runProps = run.RunProperties;
+        var fontFamily = runProps?.RunFonts?.Ascii?.Value ??
+                         runProps?.RunFonts?.HighAnsi?.Value;
+
+        var textRun = new TextRun
+        {
+            StartOffset = startOffset,
+            EndOffset = startOffset + text.Length,
+            Text = text,
+            IsBold = runProps?.Bold != null || runProps?.BoldComplexScript != null,
+            IsItalic = runProps?.Italic != null || runProps?.ItalicComplexScript != null,
+            IsUnderline = runProps?.Underline != null && runProps.Underline.Val?.Value != UnderlineValues.None,
+            IsStrikethrough = runProps?.Strike != null || runProps?.DoubleStrike != null,
+            FontFamily = fontFamily,
+            IsCode = _settings.EnableCodeBlockDetection && IsMonospaceFont(fontFamily)
+        };
+
+        elements.Add(textRun);
+        return (text, elements);
+    }
+
+    /// <summary>
+    /// Process a Hyperlink element
+    /// </summary>
+    private (string text, HyperlinkElement? element) ProcessHyperlink(
+        Hyperlink hyperlink,
+        WordprocessingDocument wordDoc,
+        int startOffset)
+    {
+        // Extract text from hyperlink runs
+        var text = string.Join("", hyperlink.Descendants<Text>().Select(t => t.Text));
+
+        if (!_settings.EnableHyperlinkConversion)
+            return (text, null);
+
+        string url = "";
+
+        // Resolve URL from relationship ID
+        var rId = hyperlink.Id?.Value;
+        if (!string.IsNullOrEmpty(rId))
+        {
+            try
+            {
+                var relationship = wordDoc.MainDocumentPart?.HyperlinkRelationships
+                    .FirstOrDefault(r => r.Id == rId);
+                if (relationship != null)
+                {
+                    url = relationship.Uri.ToString();
+                }
+            }
+            catch
+            {
+                // Best effort - hyperlink relationship may be invalid
+            }
+        }
+        // Check for anchor (internal bookmark links)
+        else if (!string.IsNullOrEmpty(hyperlink.Anchor?.Value))
+        {
+            url = "#" + hyperlink.Anchor.Value;
+        }
+
+        if (string.IsNullOrEmpty(text) && string.IsNullOrEmpty(url))
+            return (text, null);
+
+        var element = new HyperlinkElement
+        {
+            StartOffset = startOffset,
+            EndOffset = startOffset + text.Length,
+            Text = text,
+            Url = url,
+            Tooltip = hyperlink.Tooltip?.Value
+        };
+
+        return (text, element);
+    }
+
+    /// <summary>
+    /// Check if a font family is a monospace font
+    /// </summary>
+    private bool IsMonospaceFont(string? fontFamily)
+    {
+        if (string.IsNullOrEmpty(fontFamily))
+            return false;
+
+        return _settings.MonospaceFonts.Any(f =>
+            fontFamily.Contains(f, StringComparison.OrdinalIgnoreCase));
     }
 
     private SegmentType DetectSegmentType(Paragraph paragraph, string? styleId)
@@ -428,7 +588,7 @@ public class DocxParser
                 "Document contains tracked changes. Only the current version is converted.");
         }
 
-        // Check for footnotes
+        // Extract or detect footnotes
         if (wordDoc.MainDocumentPart?.FootnotesPart != null)
         {
             var footnotes = wordDoc.MainDocumentPart.FootnotesPart.Footnotes?
@@ -437,14 +597,21 @@ public class DocxParser
                             f.Type?.Value != FootnoteEndnoteValues.ContinuationSeparator);
             if (footnotes?.Any() == true)
             {
-                document.AddDiagnostic(
-                    DiagnosticLevel.Info,
-                    Diagnostics.DiagnosticCodes.FOOTNOTE_IGNORED,
-                    $"Document contains {footnotes.Count()} footnote(s) which are not included in the conversion");
+                if (_settings.EnableFootnoteConversion)
+                {
+                    ExtractFootnotes(footnotes, document);
+                }
+                else
+                {
+                    document.AddDiagnostic(
+                        DiagnosticLevel.Info,
+                        Diagnostics.DiagnosticCodes.FOOTNOTE_IGNORED,
+                        $"Document contains {footnotes.Count()} footnote(s) which are not included in the conversion");
+                }
             }
         }
 
-        // Check for endnotes
+        // Extract or detect endnotes
         if (wordDoc.MainDocumentPart?.EndnotesPart != null)
         {
             var endnotes = wordDoc.MainDocumentPart.EndnotesPart.Endnotes?
@@ -453,10 +620,17 @@ public class DocxParser
                             e.Type?.Value != FootnoteEndnoteValues.ContinuationSeparator);
             if (endnotes?.Any() == true)
             {
-                document.AddDiagnostic(
-                    DiagnosticLevel.Info,
-                    Diagnostics.DiagnosticCodes.ENDNOTE_IGNORED,
-                    $"Document contains {endnotes.Count()} endnote(s) which are not included in the conversion");
+                if (_settings.EnableFootnoteConversion)
+                {
+                    ExtractEndnotes(endnotes, document);
+                }
+                else
+                {
+                    document.AddDiagnostic(
+                        DiagnosticLevel.Info,
+                        Diagnostics.DiagnosticCodes.ENDNOTE_IGNORED,
+                        $"Document contains {endnotes.Count()} endnote(s) which are not included in the conversion");
+                }
             }
         }
 
@@ -559,5 +733,68 @@ public class DocxParser
                 Diagnostics.DiagnosticCodes.FIELD_IGNORED,
                 $"Document contains Word fields{fieldList} which show static values only");
         }
+    }
+
+    /// <summary>
+    /// Extract footnote definitions from the document
+    /// </summary>
+    private void ExtractFootnotes(IEnumerable<Footnote> footnotes, DocumentModel document)
+    {
+        foreach (var footnote in footnotes)
+        {
+            var id = (int)(footnote.Id?.Value ?? 0);
+            // Skip special footnotes (separator, continuation)
+            if (id < 1)
+                continue;
+
+            var content = ExtractNoteContent(footnote);
+            document.Footnotes.Add(new FootnoteDefinition
+            {
+                Id = id,
+                IsEndnote = false,
+                Content = content
+            });
+        }
+    }
+
+    /// <summary>
+    /// Extract endnote definitions from the document
+    /// </summary>
+    private void ExtractEndnotes(IEnumerable<Endnote> endnotes, DocumentModel document)
+    {
+        foreach (var endnote in endnotes)
+        {
+            var id = (int)(endnote.Id?.Value ?? 0);
+            // Skip special endnotes (separator, continuation)
+            if (id < 1)
+                continue;
+
+            var content = ExtractNoteContent(endnote);
+            document.Endnotes.Add(new FootnoteDefinition
+            {
+                Id = id,
+                IsEndnote = true,
+                Content = content
+            });
+        }
+    }
+
+    /// <summary>
+    /// Extract text content from a footnote or endnote
+    /// </summary>
+    private string ExtractNoteContent(OpenXmlCompositeElement note)
+    {
+        // Get all paragraphs in the note and join their text
+        var paragraphs = note.Elements<Paragraph>();
+        var textParts = new List<string>();
+
+        foreach (var para in paragraphs)
+        {
+            var paraText = string.Join("", para.Descendants<Text>().Select(t => t.Text));
+            if (!string.IsNullOrWhiteSpace(paraText))
+                textParts.Add(paraText.Trim());
+        }
+
+        return string.Join(" ", textParts);
     }
 }

@@ -36,8 +36,15 @@ public class MarkdownConverter
     /// </summary>
     public string ConvertSegment(Segment segment, DocumentModel document)
     {
-        if (string.IsNullOrWhiteSpace(segment.Content))
+        if (string.IsNullOrWhiteSpace(segment.Content) && segment.EffectiveType != SegmentType.Table && segment.EffectiveType != SegmentType.Image)
             return string.Empty;
+
+        // Check for custom style mapping first
+        var styleMapping = GetStyleMapping(segment.Metadata.StyleName);
+        if (styleMapping != null)
+        {
+            return ApplyStyleMapping(segment, styleMapping, document);
+        }
 
         return segment.EffectiveType switch
         {
@@ -52,16 +59,67 @@ public class MarkdownConverter
         };
     }
 
+    /// <summary>
+    /// Find a style mapping for the given style name
+    /// </summary>
+    private StyleMapping? GetStyleMapping(string? styleName)
+    {
+        if (string.IsNullOrEmpty(styleName))
+            return null;
+
+        return _settings.StyleMappings.FirstOrDefault(m =>
+            m.WordStyleName.Equals(styleName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Apply a style mapping to produce Markdown output
+    /// </summary>
+    private string ApplyStyleMapping(Segment segment, StyleMapping mapping, DocumentModel document)
+    {
+        var content = ProcessInlineFormatting(segment);
+
+        switch (mapping.Action)
+        {
+            case StyleMappingAction.Heading:
+                var level = Math.Clamp(mapping.HeadingLevel ?? 1, 1, _settings.MaxHeadingLevel);
+                var prefix = new string('#', level);
+                return $"{prefix} {content}";
+
+            case StyleMappingAction.CodeBlock:
+                var lang = mapping.CodeLanguage ?? _settings.CodeBlockLanguage;
+                return $"```{lang}\n{segment.Content.Trim()}\n```";
+
+            case StyleMappingAction.Blockquote:
+                // Handle multi-line blockquotes
+                var lines = content.Split('\n');
+                return string.Join("\n", lines.Select(l => $"> {l}"));
+
+            case StyleMappingAction.Exclude:
+                segment.ExcludeFromOutput = true;
+                return string.Empty;
+
+            case StyleMappingAction.IgnoreStyle:
+            case StyleMappingAction.Paragraph:
+            default:
+                var result = content;
+                if (!string.IsNullOrEmpty(mapping.CustomPrefix))
+                    result = mapping.CustomPrefix + result;
+                if (!string.IsNullOrEmpty(mapping.CustomSuffix))
+                    result = result + mapping.CustomSuffix;
+                return result;
+        }
+    }
+
     private string ConvertHeading(Segment segment)
     {
         // Determine heading level
         int level = DetermineHeadingLevel(segment);
-        
+
         if (level < 1) level = 1;
         if (level > _settings.MaxHeadingLevel) level = _settings.MaxHeadingLevel;
 
         var prefix = new string('#', level);
-        var content = ProcessInlineFormatting(segment.Content);
+        var content = ProcessInlineFormatting(segment);
 
         if (_settings.InferHeadingsFromFormatting && level > 1)
         {
@@ -105,8 +163,14 @@ public class MarkdownConverter
 
     private string ConvertParagraph(Segment segment)
     {
-        var content = ProcessInlineFormatting(segment.Content);
-        
+        // Check if entire paragraph is monospace (should be code block)
+        if (_settings.EnableCodeBlockDetection && IsEntirelyMonospace(segment))
+        {
+            return FormatAsCodeBlock(segment.Content);
+        }
+
+        var content = ProcessInlineFormatting(segment);
+
         if (_settings.PreserveLineBreaks)
         {
             // Preserve line breaks as double spaces + newline in Markdown
@@ -116,11 +180,36 @@ public class MarkdownConverter
         return content;
     }
 
+    /// <summary>
+    /// Check if segment is entirely monospace (code)
+    /// </summary>
+    private bool IsEntirelyMonospace(Segment segment)
+    {
+        if (segment.InlineElements.Count == 0)
+            return false;
+
+        // Check if all text runs are code
+        var textRuns = segment.InlineElements.OfType<TextRun>().ToList();
+        if (textRuns.Count == 0)
+            return false;
+
+        return textRuns.All(tr => tr.IsCode);
+    }
+
+    /// <summary>
+    /// Format content as a fenced code block
+    /// </summary>
+    private string FormatAsCodeBlock(string content)
+    {
+        var lang = _settings.CodeBlockLanguage;
+        return $"```{lang}\n{content.Trim()}\n```";
+    }
+
     private string ConvertListItem(Segment segment)
     {
         var level = segment.Metadata.NumberingLevel ?? 0;
         var indent = new string(' ', level * 2);
-        var content = ProcessInlineFormatting(segment.Content);
+        var content = ProcessInlineFormatting(segment);
 
         if (segment.Metadata.IsNumberedList)
         {
@@ -234,11 +323,117 @@ public class MarkdownConverter
         return "\n---\n";
     }
 
-    private string ProcessInlineFormatting(string content)
+    /// <summary>
+    /// Process inline formatting using InlineElements from the segment
+    /// </summary>
+    private string ProcessInlineFormatting(Segment segment)
     {
-        // Basic inline formatting processing
-        // This is simplified - full implementation would track formatting runs
-        return content.Trim();
+        // If no inline elements, just return trimmed content
+        if (segment.InlineElements.Count == 0)
+            return segment.Content.Trim();
+
+        var sb = new StringBuilder();
+
+        // Process elements in order
+        foreach (var element in segment.InlineElements.OrderBy(e => e.StartOffset))
+        {
+            switch (element)
+            {
+                case HyperlinkElement link:
+                    sb.Append(FormatHyperlink(link));
+                    break;
+
+                case TextRun run:
+                    sb.Append(FormatTextRun(run));
+                    break;
+
+                case FootnoteReferenceElement fnRef:
+                    sb.Append(FormatFootnoteReference(fnRef));
+                    break;
+
+                default:
+                    sb.Append(element.Text);
+                    break;
+            }
+        }
+
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>
+    /// Format a hyperlink as Markdown
+    /// </summary>
+    private string FormatHyperlink(HyperlinkElement link)
+    {
+        if (string.IsNullOrEmpty(link.Url))
+            return link.Text;
+
+        var escapedText = EscapeMarkdownText(link.Text);
+        return $"[{escapedText}]({link.Url})";
+    }
+
+    /// <summary>
+    /// Format a text run with inline formatting (bold, italic, code, etc.)
+    /// </summary>
+    private string FormatTextRun(TextRun run)
+    {
+        var text = run.Text;
+
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        // Handle inline code first (takes precedence)
+        if (run.IsCode && _settings.EnableCodeBlockDetection)
+        {
+            return $"`{text}`";
+        }
+
+        // Apply formatting in order: bold+italic > bold > italic > strikethrough
+        if (run.IsBold && run.IsItalic)
+        {
+            text = $"***{text}***";
+        }
+        else if (run.IsBold)
+        {
+            text = $"**{text}**";
+        }
+        else if (run.IsItalic)
+        {
+            text = $"*{text}*";
+        }
+
+        if (run.IsStrikethrough)
+        {
+            text = $"~~{text}~~";
+        }
+
+        // Convert underline to emphasis if setting is enabled
+        if (run.IsUnderline && _settings.ConvertUnderlineToEmphasis && !run.IsItalic)
+        {
+            text = $"*{text}*";
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// Format a footnote reference
+    /// </summary>
+    private string FormatFootnoteReference(FootnoteReferenceElement fnRef)
+    {
+        return $"[^{fnRef.NoteId}]";
+    }
+
+    /// <summary>
+    /// Escape special Markdown characters in text
+    /// </summary>
+    private static string EscapeMarkdownText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        // Escape brackets which are special in links
+        return text.Replace("[", "\\[").Replace("]", "\\]");
     }
 
     private void ValidateHeadingHierarchy(DocumentModel document)

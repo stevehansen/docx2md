@@ -31,6 +31,11 @@ public class Segment
     public string Content { get; set; } = string.Empty;
 
     /// <summary>
+    /// Inline elements within the content (hyperlinks, formatted runs, footnote refs)
+    /// </summary>
+    public List<InlineElement> InlineElements { get; set; } = new();
+
+    /// <summary>
     /// Converted Markdown output
     /// </summary>
     public string MarkdownOutput { get; set; } = string.Empty;
