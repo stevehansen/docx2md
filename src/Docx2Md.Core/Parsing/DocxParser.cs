@@ -172,7 +172,7 @@ public class DocxParser
         segment.InlineElements = inlineElements;
 
         // Detect segment type based on style
-        segment.Type = DetectSegmentType(paragraph, styleId);
+        segment.Type = DetectSegmentType(paragraph, styleId, wordDoc);
 
         // Extract formatting
         ExtractParagraphFormatting(paragraph, segment, wordDoc);
@@ -347,23 +347,34 @@ public class DocxParser
             fontFamily.Contains(f, StringComparison.OrdinalIgnoreCase));
     }
 
-    private SegmentType DetectSegmentType(Paragraph paragraph, string? styleId)
+    private SegmentType DetectSegmentType(Paragraph paragraph, string? styleId, WordprocessingDocument wordDoc)
     {
-        // Check if it's a heading based on style
+        // Check if it's a heading based on style name (English built-in styles)
         if (!string.IsNullOrEmpty(styleId))
         {
             if (styleId.StartsWith("Heading", StringComparison.OrdinalIgnoreCase))
                 return SegmentType.Heading;
-            
+
             if (styleId.StartsWith("Title", StringComparison.OrdinalIgnoreCase))
                 return SegmentType.Heading;
         }
 
-        // Check outline level
+        // Check outline level directly on paragraph
         var outlineLevel = paragraph.ParagraphProperties?.OutlineLevel?.Val?.Value;
         if (outlineLevel.HasValue)
         {
             return SegmentType.Heading;
+        }
+
+        // Check outline level from style definition (handles localized styles like Dutch "Kop1")
+        // This must be checked BEFORE NumberingProperties because heading styles can have numbering
+        if (!string.IsNullOrEmpty(styleId))
+        {
+            var styleOutlineLevel = GetStyleOutlineLevel(styleId, wordDoc);
+            if (styleOutlineLevel.HasValue)
+            {
+                return SegmentType.Heading;
+            }
         }
 
         // Check for list item
@@ -376,6 +387,37 @@ public class DocxParser
         return SegmentType.Paragraph;
     }
 
+    /// <summary>
+    /// Get the outline level defined in a style definition.
+    /// Returns null if the style has no outline level (not a heading style).
+    /// </summary>
+    private int? GetStyleOutlineLevel(string styleId, WordprocessingDocument wordDoc)
+    {
+        var stylesPart = wordDoc.MainDocumentPart?.StyleDefinitionsPart;
+        if (stylesPart?.Styles == null)
+            return null;
+
+        var style = stylesPart.Styles.Elements<Style>()
+            .FirstOrDefault(s => s.StyleId?.Value == styleId);
+
+        if (style == null)
+            return null;
+
+        // Check if this style has an outline level in its paragraph properties
+        var outlineLevel = style.StyleParagraphProperties?.OutlineLevel?.Val?.Value;
+        if (outlineLevel.HasValue)
+            return outlineLevel.Value;
+
+        // Check if this style is based on another style that might have outline level
+        var basedOnStyleId = style.BasedOn?.Val?.Value;
+        if (!string.IsNullOrEmpty(basedOnStyleId))
+        {
+            return GetStyleOutlineLevel(basedOnStyleId, wordDoc);
+        }
+
+        return null;
+    }
+
     private void ExtractParagraphFormatting(Paragraph paragraph, Segment segment, WordprocessingDocument wordDoc)
     {
         var runProps = paragraph.Descendants<RunProperties>().FirstOrDefault();
@@ -386,10 +428,24 @@ public class DocxParser
             segment.Metadata.IsUnderline = runProps.Underline != null;
         }
 
+        // Check outline level directly on paragraph first
         var outlineLevel = paragraph.ParagraphProperties?.OutlineLevel?.Val?.Value;
         if (outlineLevel.HasValue)
         {
             segment.Metadata.OutlineLevel = outlineLevel.Value;
+        }
+        else
+        {
+            // Fall back to style definition for outline level (handles localized styles)
+            var styleId = paragraph.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+            if (!string.IsNullOrEmpty(styleId))
+            {
+                var styleOutlineLevel = GetStyleOutlineLevel(styleId, wordDoc);
+                if (styleOutlineLevel.HasValue)
+                {
+                    segment.Metadata.OutlineLevel = styleOutlineLevel.Value;
+                }
+            }
         }
 
         var numPr = paragraph.ParagraphProperties?.NumberingProperties;
