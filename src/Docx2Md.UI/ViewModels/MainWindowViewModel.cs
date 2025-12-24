@@ -33,6 +33,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public Func<Task<string?>>? ShowSaveFileDialog { get; set; }
     public Func<Task<string?>>? ShowOpenProjectDialog { get; set; }
     public Func<string?, Task<string?>>? ShowSaveProjectDialog { get; set; }
+    public Func<string, Task>? CopyToClipboard { get; set; }
+
+    // Services for configuration
+    private readonly StyleMappingService _styleMappingService = new();
 
     /// <summary>
     /// Available heading levels for override ComboBox (null = use original)
@@ -71,7 +75,14 @@ public partial class MainWindowViewModel : ViewModelBase
     private ObservableCollection<SegmentViewModel> _segments = new();
 
     [ObservableProperty]
+    private ObservableCollection<SegmentViewModel> _filteredSegments = new();
+
+    [ObservableProperty]
     private SegmentViewModel? _selectedSegment;
+
+    // Collection for multi-select in DataGrid
+    private ObservableCollection<SegmentViewModel> _selectedSegments = new();
+    public ObservableCollection<SegmentViewModel> SelectedSegments => _selectedSegments;
 
     [ObservableProperty]
     private bool _showDocxPreview = true;
@@ -113,7 +124,53 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string _windowTitle = "DOCX → Markdown Translation Workbench";
 
+    // Filter properties
+    [ObservableProperty]
+    private string _searchText = string.Empty;
+
+    [ObservableProperty]
+    private SegmentType? _filterType = null;
+
+    [ObservableProperty]
+    private bool _filterHasDiagnostics = false;
+
+    [ObservableProperty]
+    private bool _filterHasOverrides = false;
+
+    // Statistics panel
+    [ObservableProperty]
+    private bool _showStatistics = false;
+
+    // Diff view
+    [ObservableProperty]
+    private bool _showDiffView = false;
+
+    // Document statistics (computed)
+    public int TotalSegments => Segments.Count;
+    public int WordCount => Segments.Sum(s => CountWords(s.Content));
+    public int CharacterCount => Segments.Sum(s => s.Content?.Length ?? 0);
+    public int HeadingCount => Segments.Count(s => s.EffectiveType == SegmentType.Heading);
+    public int ParagraphCount => Segments.Count(s => s.EffectiveType == SegmentType.Paragraph);
+    public int ListItemCount => Segments.Count(s => s.EffectiveType == SegmentType.ListItem);
+    public int TableCount => Segments.Count(s => s.EffectiveType == SegmentType.Table);
+    public int ImageCount => Segments.Count(s => s.EffectiveType == SegmentType.Image);
+    public int TotalDiagnosticCount => Segments.Sum(s => s.DiagnosticCount);
+    public int OverrideCount => Segments.Count(s => s.HasOverrides);
+    public int ExcludedCount => Segments.Count(s => s.ExcludeFromOutput);
+
+    private static int CountWords(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return 0;
+        return text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Length;
+    }
+
     private const int MaxRecentFiles = 10;
+
+    // Undo/redo support
+    private record OverrideAction(string SegmentId, string PropertyName, object? OldValue, object? NewValue);
+    private readonly Stack<OverrideAction> _undoStack = new();
+    private readonly Stack<OverrideAction> _redoStack = new();
+    private bool _isUndoingOrRedoing = false;
 
     public MainWindowViewModel()
     {
@@ -286,6 +343,59 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnIsDirtyChanged(bool value) => UpdateWindowTitle();
 
+    partial void OnSearchTextChanged(string value) => UpdateFilteredSegments();
+    partial void OnFilterTypeChanged(SegmentType? value) => UpdateFilteredSegments();
+    partial void OnFilterHasDiagnosticsChanged(bool value) => UpdateFilteredSegments();
+    partial void OnFilterHasOverridesChanged(bool value) => UpdateFilteredSegments();
+
+    private void UpdateFilteredSegments()
+    {
+        var filtered = Segments.AsEnumerable();
+
+        // Apply search text filter
+        if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            var searchLower = SearchText.ToLowerInvariant();
+            filtered = filtered.Where(s =>
+                (s.Content?.ToLowerInvariant().Contains(searchLower) ?? false) ||
+                (s.EffectiveMarkdown?.ToLowerInvariant().Contains(searchLower) ?? false) ||
+                (s.Metadata?.StyleName?.ToLowerInvariant().Contains(searchLower) ?? false));
+        }
+
+        // Apply type filter
+        if (FilterType.HasValue)
+        {
+            filtered = filtered.Where(s => s.EffectiveType == FilterType.Value);
+        }
+
+        // Apply diagnostics filter
+        if (FilterHasDiagnostics)
+        {
+            filtered = filtered.Where(s => s.DiagnosticCount > 0);
+        }
+
+        // Apply overrides filter
+        if (FilterHasOverrides)
+        {
+            filtered = filtered.Where(s => s.HasOverrides);
+        }
+
+        FilteredSegments.Clear();
+        foreach (var segment in filtered)
+        {
+            FilteredSegments.Add(segment);
+        }
+    }
+
+    [RelayCommand]
+    private void ClearFilters()
+    {
+        SearchText = string.Empty;
+        FilterType = null;
+        FilterHasDiagnostics = false;
+        FilterHasOverrides = false;
+    }
+
     private void UpdateWindowTitle()
     {
         var title = "DOCX → Markdown Translation Workbench";
@@ -308,12 +418,298 @@ public partial class MainWindowViewModel : ViewModelBase
             SelectedSegment = segment;
     }
 
+    [RelayCommand]
+    private void SelectPreviousSegment()
+    {
+        if (Segments.Count == 0) return;
+
+        if (SelectedSegment == null)
+        {
+            SelectedSegment = Segments[^1]; // Select last
+        }
+        else
+        {
+            var index = Segments.IndexOf(SelectedSegment);
+            if (index > 0)
+                SelectedSegment = Segments[index - 1];
+        }
+    }
+
+    [RelayCommand]
+    private void SelectNextSegment()
+    {
+        if (Segments.Count == 0) return;
+
+        if (SelectedSegment == null)
+        {
+            SelectedSegment = Segments[0]; // Select first
+        }
+        else
+        {
+            var index = Segments.IndexOf(SelectedSegment);
+            if (index < Segments.Count - 1)
+                SelectedSegment = Segments[index + 1];
+        }
+    }
+
+    [RelayCommand]
+    private void SelectFirstSegment()
+    {
+        if (Segments.Count > 0)
+            SelectedSegment = Segments[0];
+    }
+
+    [RelayCommand]
+    private void SelectLastSegment()
+    {
+        if (Segments.Count > 0)
+            SelectedSegment = Segments[^1];
+    }
+
+    [RelayCommand]
+    private void ToggleExcludeSelected()
+    {
+        if (SelectedSegment != null)
+            SelectedSegment.ExcludeFromOutput = !SelectedSegment.ExcludeFromOutput;
+    }
+
+    [RelayCommand]
+    private void SetHeadingLevel(int? level)
+    {
+        if (SelectedSegment != null)
+            SelectedSegment.OverrideHeadingLevel = level;
+    }
+
+    [RelayCommand]
+    private void ClearSelectedOverrides()
+    {
+        if (SelectedSegment != null)
+        {
+            SelectedSegment.ExcludeFromOutput = false;
+            SelectedSegment.OverrideHeadingLevel = null;
+            SelectedSegment.OverrideType = null;
+            SelectedSegment.ManualMarkdownOverride = null;
+        }
+    }
+
+    // Bulk operations for multi-select
+    private IEnumerable<SegmentViewModel> GetTargetSegments()
+    {
+        if (SelectedSegments.Count > 0)
+            return SelectedSegments;
+        if (SelectedSegment != null)
+            return new[] { SelectedSegment };
+        return Array.Empty<SegmentViewModel>();
+    }
+
+    [RelayCommand]
+    private void BulkToggleExclude()
+    {
+        foreach (var segment in GetTargetSegments())
+        {
+            segment.ExcludeFromOutput = !segment.ExcludeFromOutput;
+        }
+    }
+
+    [RelayCommand]
+    private void BulkSetHeadingLevel(int? level)
+    {
+        foreach (var segment in GetTargetSegments())
+        {
+            segment.OverrideHeadingLevel = level;
+        }
+    }
+
+    [RelayCommand]
+    private void BulkSetType(SegmentType? type)
+    {
+        foreach (var segment in GetTargetSegments())
+        {
+            segment.OverrideType = type;
+        }
+    }
+
+    [RelayCommand]
+    private void BulkClearOverrides()
+    {
+        foreach (var segment in GetTargetSegments())
+        {
+            segment.ExcludeFromOutput = false;
+            segment.OverrideHeadingLevel = null;
+            segment.OverrideType = null;
+            segment.ManualMarkdownOverride = null;
+        }
+    }
+
+    [RelayCommand]
+    private void BulkExclude()
+    {
+        foreach (var segment in GetTargetSegments())
+        {
+            segment.ExcludeFromOutput = true;
+        }
+    }
+
+    [RelayCommand]
+    private void BulkInclude()
+    {
+        foreach (var segment in GetTargetSegments())
+        {
+            segment.ExcludeFromOutput = false;
+        }
+    }
+
     private void OnSegmentOverrideChanged(object? sender, EventArgs e)
     {
         // Regenerate markdown when any segment override changes
         UpdateMarkdownOutput();
         // Mark as dirty when overrides change
         IsDirty = true;
+        // Refresh statistics
+        RefreshStatistics();
+    }
+
+    [RelayCommand]
+    private void ToggleStatistics() => ShowStatistics = !ShowStatistics;
+
+    [RelayCommand]
+    private void ToggleDiffView() => ShowDiffView = !ShowDiffView;
+
+    [RelayCommand]
+    private void OpenStyleMappingsConfig()
+    {
+        var filePath = _styleMappingService.GetFilePath();
+        try
+        {
+            // Ensure file exists
+            if (!File.Exists(filePath))
+            {
+                _styleMappingService.Load(); // Creates default file
+            }
+
+            // Open in default editor
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = filePath,
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+            StatusText = $"Opened style mappings config: {filePath}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error opening config: {ex.Message}";
+        }
+    }
+
+    private void RefreshStatistics()
+    {
+        OnPropertyChanged(nameof(TotalSegments));
+        OnPropertyChanged(nameof(WordCount));
+        OnPropertyChanged(nameof(CharacterCount));
+        OnPropertyChanged(nameof(HeadingCount));
+        OnPropertyChanged(nameof(ParagraphCount));
+        OnPropertyChanged(nameof(ListItemCount));
+        OnPropertyChanged(nameof(TableCount));
+        OnPropertyChanged(nameof(ImageCount));
+        OnPropertyChanged(nameof(TotalDiagnosticCount));
+        OnPropertyChanged(nameof(OverrideCount));
+        OnPropertyChanged(nameof(ExcludedCount));
+    }
+
+    // Undo/Redo functionality
+    public bool CanUndo => _undoStack.Count > 0;
+    public bool CanRedo => _redoStack.Count > 0;
+
+    public void RecordOverrideChange(string segmentId, string propertyName, object? oldValue, object? newValue)
+    {
+        if (_isUndoingOrRedoing) return;
+
+        _undoStack.Push(new OverrideAction(segmentId, propertyName, oldValue, newValue));
+        _redoStack.Clear();
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+    }
+
+    [RelayCommand]
+    private void Undo()
+    {
+        if (_undoStack.Count == 0) return;
+
+        _isUndoingOrRedoing = true;
+        try
+        {
+            var action = _undoStack.Pop();
+            _redoStack.Push(action);
+
+            // Find segment and apply old value
+            var segment = Segments.FirstOrDefault(s => s.Id == action.SegmentId);
+            if (segment != null)
+            {
+                ApplyOverrideValue(segment, action.PropertyName, action.OldValue);
+            }
+
+            OnPropertyChanged(nameof(CanUndo));
+            OnPropertyChanged(nameof(CanRedo));
+        }
+        finally
+        {
+            _isUndoingOrRedoing = false;
+        }
+    }
+
+    [RelayCommand]
+    private void Redo()
+    {
+        if (_redoStack.Count == 0) return;
+
+        _isUndoingOrRedoing = true;
+        try
+        {
+            var action = _redoStack.Pop();
+            _undoStack.Push(action);
+
+            // Find segment and apply new value
+            var segment = Segments.FirstOrDefault(s => s.Id == action.SegmentId);
+            if (segment != null)
+            {
+                ApplyOverrideValue(segment, action.PropertyName, action.NewValue);
+            }
+
+            OnPropertyChanged(nameof(CanUndo));
+            OnPropertyChanged(nameof(CanRedo));
+        }
+        finally
+        {
+            _isUndoingOrRedoing = false;
+        }
+    }
+
+    private void ApplyOverrideValue(SegmentViewModel segment, string propertyName, object? value)
+    {
+        switch (propertyName)
+        {
+            case nameof(SegmentViewModel.ExcludeFromOutput):
+                segment.ExcludeFromOutput = value is bool b && b;
+                break;
+            case nameof(SegmentViewModel.OverrideHeadingLevel):
+                segment.OverrideHeadingLevel = value as int?;
+                break;
+            case nameof(SegmentViewModel.OverrideType):
+                segment.OverrideType = value as SegmentType?;
+                break;
+            case nameof(SegmentViewModel.ManualMarkdownOverride):
+                segment.ManualMarkdownOverride = value as string;
+                break;
+        }
+    }
+
+    private void ClearUndoHistory()
+    {
+        _undoStack.Clear();
+        _redoStack.Clear();
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
     }
 
     [RelayCommand]
@@ -371,6 +767,40 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusText = $"Error exporting: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task CopyMarkdownToClipboardAsync()
+    {
+        if (!HasDocument || Segments.Count == 0)
+        {
+            StatusText = "No document loaded to copy.";
+            return;
+        }
+
+        try
+        {
+            // Build markdown from non-excluded segments
+            var markdown = string.Join("\n\n",
+                Segments
+                    .Where(s => !s.ExcludeFromOutput)
+                    .Select(s => s.EffectiveMarkdown)
+                    .Where(m => !string.IsNullOrWhiteSpace(m)));
+
+            if (CopyToClipboard != null)
+            {
+                await CopyToClipboard(markdown);
+                StatusText = "Markdown copied to clipboard.";
+            }
+            else
+            {
+                StatusText = "Clipboard not available.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error copying to clipboard: {ex.Message}";
         }
     }
 
@@ -456,7 +886,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task OpenProjectFromPathAsync(string filePath)
+    public async Task OpenProjectFromPathAsync(string filePath)
     {
         try
         {
@@ -485,8 +915,9 @@ public partial class MainWindowViewModel : ViewModelBase
                         vm.RefreshFromModel();
                     }
 
-                    // Regenerate markdown output
+                    // Regenerate markdown output and refresh statistics
                     UpdateMarkdownOutput();
+                    RefreshStatistics();
                 }
 
                 _currentProjectPath = filePath;
@@ -510,7 +941,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private void LoadDocument(string filePath)
+    public void LoadDocument(string filePath)
     {
         try
         {
@@ -537,8 +968,16 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 var vm = new SegmentViewModel(segment);
                 vm.OverrideChanged += OnSegmentOverrideChanged;
+                vm.OverrideChangedWithValues += OnSegmentOverrideChangedWithValues;
                 Segments.Add(vm);
             }
+
+            // Clear undo history when loading new document
+            ClearUndoHistory();
+
+            // Update filtered view and statistics
+            UpdateFilteredSegments();
+            RefreshStatistics();
 
             // Generate markdown output
             UpdateMarkdownOutput();
@@ -662,12 +1101,24 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var vm = new SegmentViewModel(segment);
             vm.OverrideChanged += OnSegmentOverrideChanged;
+            vm.OverrideChangedWithValues += OnSegmentOverrideChangedWithValues;
             Segments.Add(vm);
         }
 
+        ClearUndoHistory();
+        UpdateFilteredSegments();
+        RefreshStatistics();
         UpdateMarkdownOutput();
         UpdateDocxPreview();
 
         StatusText = "Sample document loaded for demonstration.";
+    }
+
+    private void OnSegmentOverrideChangedWithValues(object? sender, OverrideChangedEventArgs e)
+    {
+        if (sender is SegmentViewModel segment)
+        {
+            RecordOverrideChange(segment.Id, e.PropertyName, e.OldValue, e.NewValue);
+        }
     }
 }

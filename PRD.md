@@ -339,25 +339,29 @@ Settings apply globally but may be overridden per segment.
 - Preserve original numbered list numbering from DOCX (uses actual sequence numbers)
 - Recent files list includes both DOCX documents and project files (.docx2md)
 
+### Implemented (v1.3 - UI & Productivity)
+- Drag-and-drop file opening (drop .docx or .docx2md files onto the window)
+- Copy to clipboard (Ctrl+Shift+C) - copy markdown without file export
+- Keyboard shortcuts for segment navigation:
+  - Ctrl+↑/↓: Navigate segments
+  - Ctrl+Home/End: First/last segment
+  - E: Toggle exclude
+  - 0-6: Set heading level override
+  - Delete: Clear all overrides
+- Search/filter segments by text, type, diagnostics, or overrides
+- Bulk override operations via context menu (multi-select with Ctrl+Click)
+- Undo/redo for override changes (Ctrl+Z / Ctrl+Y)
+- Document statistics panel (F8) - word count, segment breakdown, diagnostic summary
+- Diff view (F9) - side-by-side comparison of original text vs Markdown output
+- Style mappings configuration access (Settings → Edit Style Mappings)
+
 ### Planned (Future)
 
 #### UI & Productivity
 - Rich DOCX visual preview
-- Drag-and-drop file opening
-- Keyboard shortcuts for segment navigation, view toggles, and override application
-- Copy to clipboard without full export
-- Search/filter segments by type, content, or diagnostic status
-- Bulk override operations (apply same override to multiple selected segments)
-- Undo/redo for override changes
-- Document statistics panel (word count, segment breakdown, diagnostic summary)
-- Diff view (side-by-side comparison of original text vs Markdown output)
 
 #### Known Limitations
 - Nested list visual rendering in Markdown preview is approximate (each segment renders independently, losing nesting context; markdown output is correct)
-
-#### UI for New Features
-- Style mappings configuration dialog (currently JSON file only)
-- Front matter template editor
 
 ---
 

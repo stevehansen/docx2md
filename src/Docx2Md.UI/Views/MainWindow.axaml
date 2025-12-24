@@ -2,6 +2,7 @@
          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
          xmlns:vm="using:Docx2Md.UI.ViewModels"
          xmlns:models="using:Docx2Md.UI.Models"
+         xmlns:core="using:Docx2Md.Core.Models"
          xmlns:conv="using:Docx2Md.UI.Converters"
          xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
          xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -14,7 +15,8 @@
          x:DataType="vm:MainWindowViewModel"
          Icon="/Assets/avalonia-logo.ico"
          Title="{Binding WindowTitle}"
-         Width="1200" Height="700">
+         Width="1200" Height="700"
+         DragDrop.AllowDrop="True">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
@@ -22,13 +24,36 @@
 
     <!-- Keyboard Shortcuts -->
     <suki:SukiWindow.KeyBindings>
+        <!-- File operations -->
         <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenFileCommand}" />
         <KeyBinding Gesture="Ctrl+E" Command="{Binding ExportMarkdownCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyMarkdownToClipboardCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+O" Command="{Binding OpenProjectCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding SaveProjectCommand}" />
+        <!-- View toggles -->
         <KeyBinding Gesture="F5" Command="{Binding ToggleDocxPreviewCommand}" />
         <KeyBinding Gesture="F6" Command="{Binding ToggleSegmentInspectorCommand}" />
         <KeyBinding Gesture="F7" Command="{Binding ToggleMarkdownPreviewCommand}" />
+        <KeyBinding Gesture="F8" Command="{Binding ToggleStatisticsCommand}" />
+        <KeyBinding Gesture="F9" Command="{Binding ToggleDiffViewCommand}" />
+        <!-- Segment navigation -->
+        <KeyBinding Gesture="Ctrl+Up" Command="{Binding SelectPreviousSegmentCommand}" />
+        <KeyBinding Gesture="Ctrl+Down" Command="{Binding SelectNextSegmentCommand}" />
+        <KeyBinding Gesture="Ctrl+Home" Command="{Binding SelectFirstSegmentCommand}" />
+        <KeyBinding Gesture="Ctrl+End" Command="{Binding SelectLastSegmentCommand}" />
+        <!-- Segment overrides (use Ctrl+Shift to avoid conflicts with text input) -->
+        <KeyBinding Gesture="Ctrl+Shift+E" Command="{Binding ToggleExcludeSelectedCommand}" />
+        <KeyBinding Gesture="Ctrl+D0" Command="{Binding SetHeadingLevelCommand}" CommandParameter="{x:Null}" />
+        <KeyBinding Gesture="Ctrl+D1" Command="{Binding SetHeadingLevelCommand}" CommandParameter="1" />
+        <KeyBinding Gesture="Ctrl+D2" Command="{Binding SetHeadingLevelCommand}" CommandParameter="2" />
+        <KeyBinding Gesture="Ctrl+D3" Command="{Binding SetHeadingLevelCommand}" CommandParameter="3" />
+        <KeyBinding Gesture="Ctrl+D4" Command="{Binding SetHeadingLevelCommand}" CommandParameter="4" />
+        <KeyBinding Gesture="Ctrl+D5" Command="{Binding SetHeadingLevelCommand}" CommandParameter="5" />
+        <KeyBinding Gesture="Ctrl+D6" Command="{Binding SetHeadingLevelCommand}" CommandParameter="6" />
+        <KeyBinding Gesture="Ctrl+Delete" Command="{Binding ClearSelectedOverridesCommand}" />
+        <!-- Undo/Redo -->
+        <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoCommand}" />
+        <KeyBinding Gesture="Ctrl+Y" Command="{Binding RedoCommand}" />
     </suki:SukiWindow.KeyBindings>
 
     <DockPanel>
@@ -54,6 +79,12 @@
                 <Separator />
                 <MenuItem Header="Exit" Command="{Binding ExitCommand}" InputGesture="Alt+F4" />
             </MenuItem>
+            <MenuItem Header="Edit">
+                <MenuItem Header="Undo" Command="{Binding UndoCommand}" InputGesture="Ctrl+Z" IsEnabled="{Binding CanUndo}" />
+                <MenuItem Header="Redo" Command="{Binding RedoCommand}" InputGesture="Ctrl+Y" IsEnabled="{Binding CanRedo}" />
+                <Separator />
+                <MenuItem Header="Copy Markdown to Clipboard" Command="{Binding CopyMarkdownToClipboardCommand}" InputGesture="Ctrl+Shift+C" IsEnabled="{Binding HasDocument}" />
+            </MenuItem>
             <MenuItem Header="View">
                 <MenuItem Header="Show DOCX Preview"
                           Command="{Binding ToggleDocxPreviewCommand}"
@@ -74,6 +105,21 @@
                           InputGesture="F7">
                     <MenuItem.Icon>
                         <CheckBox IsChecked="{Binding ShowMarkdownPreview}" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="Show Statistics"
+                          Command="{Binding ToggleStatisticsCommand}"
+                          InputGesture="F8">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding ShowStatistics}" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Show Diff View"
+                          Command="{Binding ToggleDiffViewCommand}"
+                          InputGesture="F9">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding ShowDiffView}" BorderThickness="0" IsHitTestVisible="False" />
                     </MenuItem.Icon>
                 </MenuItem>
             </MenuItem>
@@ -102,8 +148,63 @@
                         <CheckBox IsChecked="{Binding GenerateDiagnosticReport}" BorderThickness="0" IsHitTestVisible="False" />
                     </MenuItem.Icon>
                 </MenuItem>
+                <Separator />
+                <MenuItem Header="Edit Style Mappings..." Command="{Binding OpenStyleMappingsConfigCommand}" />
             </MenuItem>
         </Menu>
+
+        <!-- Statistics Panel (collapsible) -->
+        <Border DockPanel.Dock="Bottom" Padding="8" BorderThickness="0,1,0,0"
+                Background="{DynamicResource SukiCardBackground}"
+                BorderBrush="{DynamicResource SukiBorderBrush}"
+                IsVisible="{Binding ShowStatistics}">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                <StackPanel Grid.Column="0" Margin="0,0,15,0">
+                    <TextBlock Text="Segments" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding TotalSegments}" FontSize="14" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="0,0,15,0">
+                    <TextBlock Text="Words" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding WordCount}" FontSize="14" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Margin="0,0,15,0">
+                    <TextBlock Text="Chars" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding CharacterCount}" FontSize="14" />
+                </StackPanel>
+                <StackPanel Grid.Column="3" Margin="0,0,15,0">
+                    <TextBlock Text="Headings" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding HeadingCount}" FontSize="14" />
+                </StackPanel>
+                <StackPanel Grid.Column="4" Margin="0,0,15,0">
+                    <TextBlock Text="Paragraphs" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding ParagraphCount}" FontSize="14" />
+                </StackPanel>
+                <StackPanel Grid.Column="5" Margin="0,0,15,0">
+                    <TextBlock Text="List Items" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding ListItemCount}" FontSize="14" />
+                </StackPanel>
+                <StackPanel Grid.Column="6" Margin="0,0,15,0">
+                    <TextBlock Text="Tables" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding TableCount}" FontSize="14" />
+                </StackPanel>
+                <StackPanel Grid.Column="7" Margin="0,0,15,0">
+                    <TextBlock Text="Images" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding ImageCount}" FontSize="14" />
+                </StackPanel>
+                <StackPanel Grid.Column="8" Margin="0,0,15,0">
+                    <TextBlock Text="Diagnostics" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding TotalDiagnosticCount}" FontSize="14" />
+                </StackPanel>
+                <StackPanel Grid.Column="9" Margin="0,0,15,0">
+                    <TextBlock Text="Overrides" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding OverrideCount}" FontSize="14" />
+                </StackPanel>
+                <StackPanel Grid.Column="10" Margin="0,0,15,0">
+                    <TextBlock Text="Excluded" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource SukiLowText}" />
+                    <TextBlock Text="{Binding ExcludedCount}" FontSize="14" />
+                </StackPanel>
+            </Grid>
+        </Border>
 
         <!-- Status Bar -->
         <Border DockPanel.Dock="Bottom" Padding="8" BorderThickness="0,1,0,0"
@@ -167,14 +268,74 @@
                     <TextBlock DockPanel.Dock="Top" Text="Segment Inspector" FontWeight="Bold"
                                Padding="5" Background="{DynamicResource SukiCardBackground}" />
 
-                    <!-- Detail Panel (shown when segment selected) - docked to bottom FIRST so DataGrid fills remaining -->
+                    <!-- Filter Panel -->
+                    <Border DockPanel.Dock="Top" Background="{DynamicResource SukiLowBackground}" Padding="5">
+                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" RowDefinitions="Auto">
+                            <TextBox Grid.Column="0" Watermark="Search..." Text="{Binding SearchText}"
+                                     Margin="0,0,5,0" />
+                            <ComboBox Grid.Column="1" Width="100" Margin="0,0,5,0"
+                                      SelectedItem="{Binding FilterType}"
+                                      ItemsSource="{Binding AvailableSegmentTypes}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Converter={x:Static conv:SegmentTypeDisplayConverter.Instance}}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <CheckBox Grid.Column="2" Content="Diag" IsChecked="{Binding FilterHasDiagnostics}"
+                                      VerticalAlignment="Center" Margin="0,0,5,0" ToolTip.Tip="Show only segments with diagnostics" />
+                            <CheckBox Grid.Column="3" Content="Override" IsChecked="{Binding FilterHasOverrides}"
+                                      VerticalAlignment="Center" Margin="0,0,5,0" ToolTip.Tip="Show only segments with overrides" />
+                            <Button Grid.Column="4" Content="Clear" Command="{Binding ClearFiltersCommand}"
+                                    Padding="8,4" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Diff View Panel (shown when diff mode enabled and segment selected) -->
                     <Border DockPanel.Dock="Bottom"
-                            IsVisible="{Binding SelectedSegment, Converter={x:Static ObjectConverters.IsNotNull}}"
                             Background="{DynamicResource SukiCardBackground}"
                             BorderBrush="{DynamicResource SukiBorderBrush}"
                             BorderThickness="0,1,0,0"
                             Padding="10"
                             Margin="0,5,0,0">
+                        <Border.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="ShowDiffView" />
+                                <Binding Path="SelectedSegment" Converter="{x:Static ObjectConverters.IsNotNull}" />
+                            </MultiBinding>
+                        </Border.IsVisible>
+                        <Grid ColumnDefinitions="*,10,*" RowDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0" Grid.Row="0" Text="Original Content" FontWeight="SemiBold" Margin="0,0,0,5" />
+                            <TextBlock Grid.Column="2" Grid.Row="0" Text="Effective Markdown" FontWeight="SemiBold" Margin="0,0,0,5" />
+                            <Border Grid.Column="0" Grid.Row="1" Background="{DynamicResource SukiBackground}"
+                                    BorderBrush="{DynamicResource SukiBorderBrush}" BorderThickness="1" Padding="6" CornerRadius="4">
+                                <ScrollViewer MaxHeight="120" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                    <TextBlock Text="{Binding SelectedSegment.Content}" TextWrapping="Wrap" Foreground="{DynamicResource SukiText}" />
+                                </ScrollViewer>
+                            </Border>
+                            <Border Grid.Column="2" Grid.Row="1" Background="{DynamicResource SukiBackground}"
+                                    BorderBrush="{DynamicResource SukiBorderBrush}" BorderThickness="1" Padding="6" CornerRadius="4">
+                                <ScrollViewer MaxHeight="120" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                    <TextBlock Text="{Binding SelectedSegment.EffectiveMarkdown}" TextWrapping="Wrap"
+                                               FontFamily="Consolas,Courier New,monospace" Foreground="{DynamicResource SukiText}" />
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- Detail Panel (shown when segment selected and NOT in diff mode) -->
+                    <Border DockPanel.Dock="Bottom"
+                            Background="{DynamicResource SukiCardBackground}"
+                            BorderBrush="{DynamicResource SukiBorderBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="10"
+                            Margin="0,5,0,0">
+                        <Border.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="!ShowDiffView" />
+                                <Binding Path="SelectedSegment" Converter="{x:Static ObjectConverters.IsNotNull}" />
+                            </MultiBinding>
+                        </Border.IsVisible>
                         <StackPanel Spacing="8">
                             <TextBlock Text="Segment Overrides" FontWeight="SemiBold" />
 
@@ -253,13 +414,40 @@
 
                     <!-- Segment List (fills remaining space after header and bottom panel) -->
                     <DataGrid x:Name="SegmentDataGrid"
-                              ItemsSource="{Binding Segments}"
+                              ItemsSource="{Binding FilteredSegments}"
                               SelectedItem="{Binding SelectedSegment}"
+                              SelectionMode="Extended"
+                              SelectionChanged="OnDataGridSelectionChanged"
                               AutoGenerateColumns="False"
                               IsReadOnly="True"
                               GridLinesVisibility="All"
                               CanUserReorderColumns="True"
                               CanUserResizeColumns="True">
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Exclude Selected" Command="{Binding BulkExcludeCommand}" />
+                                <MenuItem Header="Include Selected" Command="{Binding BulkIncludeCommand}" />
+                                <MenuItem Header="Toggle Exclude" Command="{Binding BulkToggleExcludeCommand}" />
+                                <Separator />
+                                <MenuItem Header="Set Heading Level">
+                                    <MenuItem Header="Clear" Command="{Binding BulkSetHeadingLevelCommand}" CommandParameter="{x:Null}" />
+                                    <MenuItem Header="H1" Command="{Binding BulkSetHeadingLevelCommand}" CommandParameter="1" />
+                                    <MenuItem Header="H2" Command="{Binding BulkSetHeadingLevelCommand}" CommandParameter="2" />
+                                    <MenuItem Header="H3" Command="{Binding BulkSetHeadingLevelCommand}" CommandParameter="3" />
+                                    <MenuItem Header="H4" Command="{Binding BulkSetHeadingLevelCommand}" CommandParameter="4" />
+                                    <MenuItem Header="H5" Command="{Binding BulkSetHeadingLevelCommand}" CommandParameter="5" />
+                                    <MenuItem Header="H6" Command="{Binding BulkSetHeadingLevelCommand}" CommandParameter="6" />
+                                </MenuItem>
+                                <MenuItem Header="Set Type">
+                                    <MenuItem Header="Clear" Command="{Binding BulkSetTypeCommand}" CommandParameter="{x:Null}" />
+                                    <MenuItem Header="Heading" Command="{Binding BulkSetTypeCommand}" CommandParameter="{x:Static core:SegmentType.Heading}" />
+                                    <MenuItem Header="Paragraph" Command="{Binding BulkSetTypeCommand}" CommandParameter="{x:Static core:SegmentType.Paragraph}" />
+                                    <MenuItem Header="List Item" Command="{Binding BulkSetTypeCommand}" CommandParameter="{x:Static core:SegmentType.ListItem}" />
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem Header="Clear All Overrides" Command="{Binding BulkClearOverridesCommand}" />
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="#" Binding="{Binding OrderIndex}" Width="40" />
                             <DataGridTextColumn Header="Type" Binding="{Binding EffectiveType}" Width="80" />

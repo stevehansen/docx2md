@@ -26,6 +26,10 @@ public partial class MainWindow : SukiWindow
         {
             SetupViewModel(viewModel);
         }
+
+        // Wire up drag-and-drop
+        AddHandler(DragDrop.DropEvent, OnFileDrop);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -51,7 +55,16 @@ public partial class MainWindow : SukiWindow
         viewModel.ShowSaveFileDialog = ShowSaveFileDialogAsync;
         viewModel.ShowOpenProjectDialog = ShowOpenProjectDialogAsync;
         viewModel.ShowSaveProjectDialog = (suggestedFileName) => ShowSaveProjectDialogAsync(suggestedFileName);
+        viewModel.CopyToClipboard = CopyToClipboardAsync;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    private async Task CopyToClipboardAsync(string text)
+    {
+        if (Clipboard != null)
+        {
+            await Clipboard.SetTextAsync(text);
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -189,6 +202,69 @@ public partial class MainWindow : SukiWindow
             if (DataContext is MainWindowViewModel vm)
             {
                 vm.SelectedSegment = segment;
+            }
+        }
+    }
+
+    private void OnDataGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm && sender is DataGrid dataGrid)
+        {
+            vm.SelectedSegments.Clear();
+            foreach (var item in dataGrid.SelectedItems)
+            {
+                if (item is SegmentViewModel segment)
+                {
+                    vm.SelectedSegments.Add(segment);
+                }
+            }
+        }
+    }
+
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        // Check if the drag contains files
+        var files = e.Data.GetFiles();
+        if (files != null)
+        {
+            foreach (var file in files)
+            {
+                var path = file.Path.LocalPath;
+                var ext = Path.GetExtension(path).ToLowerInvariant();
+                if (ext == ".docx" || ext == ".docx2md")
+                {
+                    e.DragEffects = DragDropEffects.Copy;
+                    return;
+                }
+            }
+        }
+        e.DragEffects = DragDropEffects.None;
+    }
+
+    private async void OnFileDrop(object? sender, DragEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        var files = e.Data.GetFiles();
+        if (files == null)
+            return;
+
+        // Get the first valid file
+        foreach (var file in files)
+        {
+            var path = file.Path.LocalPath;
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+
+            if (ext == ".docx")
+            {
+                vm.LoadDocument(path);
+                return;
+            }
+            else if (ext == ".docx2md")
+            {
+                await vm.OpenProjectFromPathAsync(path);
+                return;
             }
         }
     }

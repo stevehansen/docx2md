@@ -6,6 +6,23 @@ using Docx2Md.Core.Models;
 namespace Docx2Md.UI.ViewModels;
 
 /// <summary>
+/// Event args for override changes with old/new values for undo support
+/// </summary>
+public class OverrideChangedEventArgs : EventArgs
+{
+    public string PropertyName { get; }
+    public object? OldValue { get; }
+    public object? NewValue { get; }
+
+    public OverrideChangedEventArgs(string propertyName, object? oldValue, object? newValue)
+    {
+        PropertyName = propertyName;
+        OldValue = oldValue;
+        NewValue = newValue;
+    }
+}
+
+/// <summary>
 /// ViewModel wrapper for Segment that provides change notification for UI binding.
 /// Enables live updates when override properties change.
 /// </summary>
@@ -17,6 +34,11 @@ public partial class SegmentViewModel : ViewModelBase
     /// Event raised when any override property changes, signaling markdown regeneration is needed.
     /// </summary>
     public event EventHandler? OverrideChanged;
+
+    /// <summary>
+    /// Event raised with property change details for undo/redo support.
+    /// </summary>
+    public event EventHandler<OverrideChangedEventArgs>? OverrideChangedWithValues;
 
     /// <summary>
     /// Whether this segment is currently selected in the UI.
@@ -65,9 +87,10 @@ public partial class SegmentViewModel : ViewModelBase
         {
             if (_segment.ExcludeFromOutput != value)
             {
+                var oldValue = _segment.ExcludeFromOutput;
                 _segment.ExcludeFromOutput = value;
                 OnPropertyChanged();
-                RaiseOverrideChanged();
+                RaiseOverrideChanged(nameof(ExcludeFromOutput), oldValue, value);
             }
         }
     }
@@ -82,10 +105,11 @@ public partial class SegmentViewModel : ViewModelBase
         {
             if (_segment.OverrideHeadingLevel != value)
             {
+                var oldValue = _segment.OverrideHeadingLevel;
                 _segment.OverrideHeadingLevel = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(EffectiveMarkdown));
-                RaiseOverrideChanged();
+                RaiseOverrideChanged(nameof(OverrideHeadingLevel), oldValue, value);
             }
         }
     }
@@ -100,11 +124,12 @@ public partial class SegmentViewModel : ViewModelBase
         {
             if (_segment.OverrideType != value)
             {
+                var oldValue = _segment.OverrideType;
                 _segment.OverrideType = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(EffectiveType));
                 OnPropertyChanged(nameof(EffectiveMarkdown));
-                RaiseOverrideChanged();
+                RaiseOverrideChanged(nameof(OverrideType), oldValue, value);
             }
         }
     }
@@ -119,11 +144,12 @@ public partial class SegmentViewModel : ViewModelBase
         {
             if (_segment.ManualMarkdownOverride != value)
             {
+                var oldValue = _segment.ManualMarkdownOverride;
                 _segment.ManualMarkdownOverride = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(EffectiveMarkdown));
                 OnPropertyChanged(nameof(HasManualOverride));
-                RaiseOverrideChanged();
+                RaiseOverrideChanged(nameof(ManualMarkdownOverride), oldValue, value);
             }
         }
     }
@@ -133,9 +159,19 @@ public partial class SegmentViewModel : ViewModelBase
     /// </summary>
     public bool HasManualOverride => !string.IsNullOrEmpty(_segment.ManualMarkdownOverride);
 
-    private void RaiseOverrideChanged()
+    /// <summary>
+    /// Whether this segment has any overrides applied
+    /// </summary>
+    public bool HasOverrides =>
+        _segment.ExcludeFromOutput ||
+        _segment.OverrideHeadingLevel.HasValue ||
+        _segment.OverrideType.HasValue ||
+        !string.IsNullOrEmpty(_segment.ManualMarkdownOverride);
+
+    private void RaiseOverrideChanged(string propertyName, object? oldValue, object? newValue)
     {
         OverrideChanged?.Invoke(this, EventArgs.Empty);
+        OverrideChangedWithValues?.Invoke(this, new OverrideChangedEventArgs(propertyName, oldValue, newValue));
     }
 
     /// <summary>
