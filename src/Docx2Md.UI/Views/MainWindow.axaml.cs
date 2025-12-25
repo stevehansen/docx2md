@@ -52,7 +52,7 @@ public partial class MainWindow : SukiWindow
     {
         _viewModel = viewModel;
         viewModel.ShowOpenFileDialog = ShowOpenFileDialogAsync;
-        viewModel.ShowSaveFileDialog = ShowSaveFileDialogAsync;
+        viewModel.ShowSaveFileDialog = (suggested) => ShowSaveFileDialogAsync(suggested);
         viewModel.ShowOpenProjectDialog = ShowOpenProjectDialogAsync;
         viewModel.ShowSaveProjectDialog = (suggestedFileName) => ShowSaveProjectDialogAsync(suggestedFileName);
         viewModel.CopyToClipboard = CopyToClipboardAsync;
@@ -129,13 +129,13 @@ public partial class MainWindow : SukiWindow
         return files.Count > 0 ? files[0].Path.LocalPath : null;
     }
 
-    private async Task<string?> ShowSaveFileDialogAsync()
+    private async Task<string?> ShowSaveFileDialogAsync(string? suggestedFileName = null)
     {
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Export Markdown",
             DefaultExtension = "md",
-            SuggestedFileName = "output.md",
+            SuggestedFileName = suggestedFileName ?? "output.md",
             FileTypeChoices = new[]
             {
                 new FilePickerFileType("Markdown Files")

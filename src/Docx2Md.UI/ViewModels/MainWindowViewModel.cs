@@ -30,7 +30,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // Delegate for file dialogs (injected by View)
     public Func<Task<string?>>? ShowOpenFileDialog { get; set; }
-    public Func<Task<string?>>? ShowSaveFileDialog { get; set; }
+    public Func<string?, Task<string?>>? ShowSaveFileDialog { get; set; }
     public Func<Task<string?>>? ShowOpenProjectDialog { get; set; }
     public Func<string?, Task<string?>>? ShowSaveProjectDialog { get; set; }
     public Func<string, Task>? CopyToClipboard { get; set; }
@@ -199,6 +199,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
         // Load recent files
         LoadRecentFiles();
+
+        // Set initial window title with version
+        UpdateWindowTitle();
     }
 
     private void LoadRecentFiles()
@@ -398,7 +401,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void UpdateWindowTitle()
     {
-        var title = "DOCX → Markdown Translation Workbench";
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var versionStr = version != null ? $" v{version.Major}.{version.Minor}.{version.Build}" : "";
+        var title = $"DOCX → Markdown Workbench{versionStr}";
         if (HasDocument)
         {
             var docName = Path.GetFileName(_currentFilePath);
@@ -753,7 +758,11 @@ public partial class MainWindowViewModel : ViewModelBase
                 return;
             }
 
-            var filePath = await ShowSaveFileDialog();
+            // Suggest filename based on source document
+            var suggestedName = !string.IsNullOrEmpty(_currentFilePath)
+                ? Path.GetFileNameWithoutExtension(_currentFilePath) + ".md"
+                : null;
+            var filePath = await ShowSaveFileDialog(suggestedName);
             if (!string.IsNullOrEmpty(filePath))
             {
                 StatusText = "Exporting Markdown...";
