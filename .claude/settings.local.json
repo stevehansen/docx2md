@@ -7,7 +7,13 @@
       "Bash(dotnet build:*)",
       "Bash(dotnet run:*)",
       "WebSearch",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(ls:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File publish.ps1 -Clean)",
+      "Bash(git push:*)",
+      "Bash(gh release create:*)",
+      "Bash(powershell Compress-Archive -Path scripts -DestinationPath scripts.zip -Force)",
+      "Bash(gh release upload:*)"
     ]
   }
 }

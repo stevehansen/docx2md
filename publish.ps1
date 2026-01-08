@@ -44,11 +44,22 @@ if (Test-Path $ExePath) {
     $SizeMB = [math]::Round($FileInfo.Length / 1MB, 2)
     $Version = (Get-Item $ExePath).VersionInfo.FileVersion
 
+    # Create scripts.zip for release
+    $ScriptsDir = Join-Path $ProjectRoot "scripts"
+    $ScriptsZip = Join-Path $PublishDir "scripts.zip"
+    if (Test-Path $ScriptsDir) {
+        Write-Host "Creating scripts.zip..." -ForegroundColor Yellow
+        Compress-Archive -Path $ScriptsDir -DestinationPath $ScriptsZip -Force
+    }
+
     Write-Host ""
     Write-Host "=== Publish Complete ===" -ForegroundColor Green
     Write-Host "Executable: $ExePath"
     Write-Host "Size: $SizeMB MB"
     Write-Host "Version: $Version"
+    if (Test-Path $ScriptsZip) {
+        Write-Host "Scripts: $ScriptsZip"
+    }
     Write-Host ""
 
     # Offer to register context menu
