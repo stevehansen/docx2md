@@ -24,7 +24,7 @@
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
     <PackageReference Include="Markdown.Avalonia" Version="11.0.3" />
-    <PackageReference Include="SukiUI" Version="6.0.3" />
+    <PackageReference Include="SukiUI" Version="7.0.1" />
   </ItemGroup>
 
   <ItemGroup>
